@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "mode": "synthetic-demo-not-engine-output",
+  "passed": 3,
+  "failed": 0,
+  "results": [
+    {
+      "case_id": "unexpected-login-failure",
+      "step": 1,
+      "fingerprint": "dd3ad8455cfc2089195daff1bb06bbf167c2741a6a5b9c60013207c5670a6931",
+      "expected": {
+        "rule_id": "100100",
+        "level": 10,
+        "decoder": "json",
+        "mitre_contains": [
+          "T1110"
+        ]
+      },
+      "actual": {
+        "rule_id": "100100",
+        "level": 10,
+        "alert": true,
+        "decoder": "json",
+        "groups": [
+          "ruleguard_demo"
+        ],
+        "mitre": [
+          "T1110"
+        ],
+        "warning_count": 0
+      },
+      "status": "pass",
+      "failures": []
+    },
+    {
+      "case_id": "healthcheck-exception",
+      "step": 1,
+      "fingerprint": "b81e00280b40ccaee6bd752e9d3021ed914c576e0cabdb388429ba1119d1237d",
+      "expected": {
+        "rule_id": "100101",
+        "level": 0,
+        "alert": false
+      },
+      "actual": {
+        "rule_id": "100101",
+        "level": 0,
+        "alert": false,
+        "decoder": "json",
+        "groups": [
+          "ruleguard_demo"
+        ],
+        "mitre": [],
+        "warning_count": 0
+      },
+      "status": "pass",
+      "failures": []
+    },
+    {
+      "case_id": "unrelated-event",
+      "step": 1,
+      "fingerprint": "1c29c609206da2d542d82a33812c1146dc1b36b3c06ea15350d331594fa200e3",
+      "expected": {
+        "forbidden_rule_ids": [
+          "100100",
+          "100101"
+        ]
+      },
+      "actual": {
+        "rule_id": "60000",
+        "level": 0,
+        "alert": false,
+        "decoder": "json",
+        "groups": [
+          "json"
+        ],
+        "mitre": [],
+        "warning_count": 0
+      },
+      "status": "pass",
+      "failures": []
+    }
+  ]
+}

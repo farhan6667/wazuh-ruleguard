@@ -1,0 +1,15 @@
+<!-- Synthetic teaching example. Review and load on a disposable Wazuh 4.x manager.
+     Check IDs are unused. These rules have not been validated against a live engine. -->
+<group name="ruleguard_demo,">
+  <rule id="100100" level="10">
+    <if_sid>60000</if_sid>
+    <field name="event_type">^login_failure$</field>
+    <description>Demo: login failure in a JSON application event.</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+  <rule id="100101" level="0">
+    <if_sid>100100</if_sid>
+    <field name="username">^svc_healthcheck$</field>
+    <description>Demo only: narrow healthcheck exception.</description>
+  </rule>
+</group>

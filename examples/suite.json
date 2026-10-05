@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "unexpected-login-failure",
+      "events": [
+        {
+          "event": "{\"event_type\": \"login_failure\", \"username\": \"demo_user\"}",
+          "expect": {
+            "rule_id": "100100",
+            "level": 10,
+            "decoder": "json",
+            "mitre_contains": [
+              "T1110"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "healthcheck-exception",
+      "events": [
+        {
+          "event": "{\"event_type\": \"login_failure\", \"username\": \"svc_healthcheck\"}",
+          "expect": {
+            "rule_id": "100101",
+            "level": 0,
+            "alert": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "unrelated-event",
+      "events": [
+        {
+          "event": "{\"event_type\": \"heartbeat\", \"username\": \"demo_user\"}",
+          "expect": {
+            "forbidden_rule_ids": [
+              "100100",
+              "100101"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
