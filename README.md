@@ -1,32 +1,41 @@
 # Wazuh RuleGuard
 
-**Catch detection regressions before a rule change or manager upgrade reaches production.**
+Check whether a Wazuh rule change breaks the detections you expect.
 
-RuleGuard runs a declarative corpus of raw logs against the real Wazuh 4.x logtest API,
-checks expected detections and exceptions, and compares results between two environments.
-Python 3.10+, zero runtime dependencies, Windows/Linux/macOS CLI.
+RuleGuard sends your sample logs to the Wazuh 4.x logtest API and checks the
+results against a JSON suite. Run the same suite before and after a change to see
+which detections moved. Reports work in a terminal, CI job or browser.
 
-Status: **0.1.0 prototype**. Unit and API-contract tests pass locally. No live Wazuh engine
-has been used to validate this release. The included demo observations are synthetic.
-Wazuh 5.x uses a different pipeline and is not supported by this adapter.
+Requires Python 3.10 or newer. There are no runtime dependencies.
 
-## The problem
+Version 0.1.0 is a prototype. Local tests cover the client and CLI on Windows with
+Python 3.12. Live Wazuh validation is still pending, and the demo observations are
+synthetic. This adapter supports the 4.x API contract; Wazuh 5.x needs a different
+adapter.
 
-You tune a noisy rule and the sample log passes. Did you accidentally suppress a malicious
-variant? Does the rule still decode the same way after an upgrade? A repeatable corpus gives
-you a reviewable answer for the samples you actually tested.
+## Why keep a test corpus?
 
-## What you get
+Suppose you add an exception for a healthcheck account. The healthcheck should
+stop alerting, but an ordinary failed login should still trigger its rule. Keep
+both samples in a suite so the next rule edit tests both outcomes.
 
-- Positive checks: rule ID, alert flag, level, decoder, ATT&CK IDs and rule groups.
-- Negative checks: forbidden rule IDs and expected non-alerts.
-- Multiple events in one case reuse a logtest session for correlation. Cases are isolated.
-- Unexpected session replacement is an error, preventing silent correlation resets.
-- Backend warnings fail checks by default, including configuration/list loading warnings.
-- JSON, JUnit XML and HTML artifacts; nonzero exits for regressions or backend errors.
-- Stable comparisons omit timestamps, counters, descriptions, JWTs and raw event text.
-- Input fingerprints distinguish changed test inputs from changed detection behavior.
-- HTTPS certificate verification, custom CA support, blocked redirects and no automatic retries.
+A manager upgrade can also change decoding or rule selection. Saving a baseline
+lets you review those changes for the samples in your corpus.
+
+## Checks and reports
+
+Each event can check the rule ID, alert flag, level and decoder. You can also
+require ATT&CK IDs or rule groups, forbid particular rules, or expect no alert.
+Events within one case share a logtest session for correlation. Each case gets
+its own session, and an unexpected session replacement fails the run.
+
+Backend warnings fail checks by default, including warnings about configuration
+or list loading. JSON, JUnit XML and offline HTML reports give you a result to
+review. The comparison records changed inputs separately from changed behavior.
+It omits timestamps, counters, descriptions, JWTs and raw event text.
+
+HTTPS certificates are verified. Custom CA files are supported, redirects are
+blocked and requests aren't retried automatically.
 
 ## Try the offline demo
 
@@ -47,7 +56,7 @@ Install the CLI with `python -m pip install .`, then use `ruleguard` instead of
 
 ## Connect a test manager
 
-Set `WAZUH_API_TOKEN` to an existing, short-lived Wazuh API JWT using your normal secret
+Set `WAZUH_API_TOKEN` to an existing, temporary Wazuh API JWT using your normal secret
 management process. Never put it in the suite or command arguments. Then:
 
 ```sh
@@ -59,7 +68,7 @@ rules, restart services, change production settings, or authenticate with userna
 For the teaching example, `examples/local_rules.xml` contains custom rule IDs that must be
 checked for collisions before use. Its expected output still needs live verification.
 
-Use a least-privilege account authorized for logtest and session cleanup. The existing JWT is
+Use a account with only the required permissions authorized for logtest and session cleanup. The existing JWT is
 used only on the specified HTTPS origin; environment proxies are ignored. No insecure TLS
 switch is provided. Long suites may require a JWT lifetime that covers the run; a failed request
 is not retried because a retry could duplicate correlation events.
@@ -96,7 +105,7 @@ wrapper. Preserve its original location when your rules depend on it.
 2. Load the same custom rules and dependencies on the candidate manager; save `candidate.json`.
 3. `ruleguard compare baseline.json candidate.json --json changes.json --html changes.html`.
 4. Review every change; a changed rule ID is not automatically a vulnerability or regression.
-5. Follow up with ingestion and alert-delivery tests before rolling out an upgrade.
+5. Follow up with ingestion and alert delivery tests before rolling out an upgrade.
 
 Exit codes: 0 checks pass/no differences, 1 assertions/differences/backend run errors, 2
 invalid configuration/input or output failure, 130 interruption. `--allow-warnings` explicitly
@@ -105,8 +114,8 @@ permits backend warnings. It should only be used after reviewing the manager loc
 ## Limits and data handling
 
 Logtest does not prove production log collection, indexing, alert delivery or live correlation
-will work. Sequences run as fast as the API responds; this is not a virtual-clock simulator and
-does not exercise delays, out-of-order delivery or production traffic volume. The corpus defines
+will work. Sequences run as fast as the API responds; this is not a simulator with a virtual clock and
+does not exercise delays, events arriving out of order or production traffic volume. The corpus defines
 the coverage; passing a small corpus cannot establish detection quality across your fleet.
 
 Reports exclude raw event text and session/JWT tokens. Case names, rule metadata and fingerprints
@@ -119,8 +128,7 @@ crash or network outage may leave a session until Wazuh expires it.
 [wazuhdevenv](https://github.com/zbalkan/wazuhdevenv) provides an established testing development
 environment. [wazuhtester](https://pypi.org/project/wazuhtester/) offers a socket client and pytest
 integration. RuleGuard focuses on JSON scenario contracts, HTTPS manager access, explicit
-negative cases and portable before/after artifacts. Evaluate those tools too; this is not a
-claim that their feature sets lack every capability listed here.
+negative cases and reports for comparing runs. Compare the available tools against your workflow before choosing one.
 
 API behavior follows [Wazuh's official logtest documentation](https://documentation.wazuh.com/current/user-manual/ruleset/testing.html).
 
@@ -130,8 +138,10 @@ API behavior follows [Wazuh's official logtest documentation](https://documentat
 python -m unittest discover -s tests -v
 ```
 
-Contributions most useful before a release: live-manager compatibility results with the version
+Contributions most useful before a release: live manager compatibility results with the version
 and sanitized fixtures, negative cases for common exceptions, and real correlation scenarios.
-Do not upload organization logs or credentials. See CONTRIBUTING.md and SECURITY.md.
+Do not upload organization logs or credentials. See [contribution notes](CONTRIBUTING.md) and [security notes](SECURITY.md).
 
 Built by [Syed Farhan Ahmed](https://farhan6667.github.io/portfolio/).
+
+For a walkthrough with expected exit codes, see [the demo guide](docs/demo.md).
