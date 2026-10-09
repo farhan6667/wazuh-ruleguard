@@ -54,7 +54,9 @@ def run_html(report):
             "<div class='cards'>"
             f"<div class='card'><b class='ok'>{passed}</b><span>passed</span></div>"
             f"<div class='card'><b class='{'bad' if failed else 'ok'}'>{failed}</b><span>failed or error</span></div>"
-            f"<div class='card'><b class='m'>{E(str(report['mode']))}</b><span>mode</span></div></div>"]
+            f"<div class='card'><b class='m'>{E(str(report['mode']))}</b><span>mode</span></div>"
+            + (f"<div class='card'><b class='m'>{E(str(report['label']))}</b><span>label</span></div>" if report.get("label") else "")
+            + "</div>"]
     if str(report["mode"]).startswith("offline-replay"):
         body.append("<div class='note'>Replay checks stored observations. It does not evaluate detection rules or establish what a Wazuh manager does today.</div>")
     body.append("<h2>Cases</h2><table><tr><th>Case</th><th>Step</th><th>Status</th><th>Expected</th><th>Actual</th><th>Why it failed</th></tr>")
@@ -78,6 +80,15 @@ def compare_html(report):
             f"<div class='card'><b class='{'bad' if ch else 'ok'}'>{len(ch)}</b><span>changes</span></div>"
             f"<div class='card'><b class='m'>{E(str(report.get('before_mode')))}</b><span>before mode</span></div>"
             f"<div class='card'><b class='m'>{E(str(report.get('after_mode')))}</b><span>after mode</span></div></div>"]
+    bl, al = report.get("before_label"), report.get("after_label")
+    if bl or al:
+        body.append(f"<div class='note'>Run labels: before <code>{E(str(bl or 'none'))}</code>, after <code>{E(str(al or 'none'))}</code>.</div>")
+    else:
+        body.append("<div class='note'>Neither run has a label, so nothing here says whether they used different Wazuh versions. Add <code>--label</code> when you run.</div>")
+    if report.get("dropped_to_zero"):
+        body.append("<div class='note'><b class='bad'>Rules that matched nothing in the second run:</b> "
+                    + ", ".join(f"<code>{E(str(r))}</code>" for r in report["dropped_to_zero"])
+                    + ". A rule that quietly stops matching is the failure that is easiest to miss.</div>")
     if not ch:
         body.append("<div class='note'>No differences between the two runs for the cases they share.</div>")
     else:
@@ -89,6 +100,12 @@ def compare_html(report):
                 f"<tr><td><code>{E(str(c['case_id']))}</code></td><td>{E(str(c['step']))}</td>"
                 f"<td><span class='pill k'>{E(c['kind'])}</span></td>"
                 f"<td class='before'>{_kv(c.get('before'), keys)}</td><td class='after'>{_kv(c.get('after'), keys)}</td></tr>")
+        body.append("</table>")
+    if report.get("rule_counts"):
+        body.append("<h2>Sample events per rule</h2><table><tr><th>Rule</th><th>Before</th><th>After</th></tr>")
+        for r in report["rule_counts"]:
+            cls = "bad" if r["before"] > 0 and r["after"] == 0 else "warn"
+            body.append(f"<tr><td><code>{E(str(r['rule_id']))}</code></td><td>{r['before']}</td><td class='{cls}'>{r['after']}</td></tr>")
         body.append("</table>")
     return _page("RuleGuard comparison", body)
 
@@ -118,4 +135,8 @@ def compare_markdown(report):
             lines.append(f"| `{_md(c['case_id'])}` | {_md(c['step'])} | {_md(c['kind'])} | {_md(b.get('rule_id', '-'))} | {_md(a.get('rule_id', '-'))} | {_md(b.get('alert', '-'))} | {_md(a.get('alert', '-'))} |")
     else:
         lines.append("No differences.")
+    if report.get("before_label") or report.get("after_label"):
+        lines += ["", f"Labels: before `{_md(report.get('before_label') or 'none')}`, after `{_md(report.get('after_label') or 'none')}`"]
+    if report.get("dropped_to_zero"):
+        lines += ["", "**Rules that matched nothing in the second run:** " + ", ".join(f"`{_md(r)}`" for r in report["dropped_to_zero"])]
     return "\n".join(lines) + "\n"

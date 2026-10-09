@@ -22,6 +22,14 @@ jobs:
       - run: ruleguard validate tests/wazuh/suite.json
 ```
 
+Add a lint step in the same job to catch rule XML that loads fine and never matches:
+
+```yaml
+      - run: ruleguard lint rules/ --strict --markdown lint.md
+      - if: always()
+        run: cat lint.md >> "$GITHUB_STEP_SUMMARY"
+```
+
 ## 2. Run the suite against a test manager
 
 Real checks need the logtest API of a Wazuh 4.x manager you are allowed to test against. Use a disposable or staging manager, never production. The runner must be able to reach it, so a self-hosted runner inside your network is usually the right choice.

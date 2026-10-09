@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `ruleguard lint` checks Wazuh rule XML offline for rules that load and quietly never match: PCRE-only syntax without `type="pcre2"`, `*` or `+` on a plain character, backslash expressions in `<match>`, undocumented rule elements, duplicate IDs, bad levels, missing descriptions, and notes for rules pinned to an address or hostname and for sibling rules. Errors exit with 1, `--strict` also fails on warnings, `--json` and `--markdown` write reports.
+- `compare` now counts the sample events each rule matched in each run and lists rules that dropped to zero.
+- `run --label` stores a free-text label (for example the Wazuh version) in the report, and the comparison shows it.
+- New `docs/wazuh-gotchas.md` with the quiet failures behind these checks, and `examples/rules-with-problems.xml` to try the linter on.
+
 ## 0.2.0: 2026-10-09
 
 - HTML reports are now readable pages (summary cards, a case table, before and after panels) instead of a JSON dump. Still one offline file with no scripts and a strict Content Security Policy.

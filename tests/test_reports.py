@@ -41,7 +41,7 @@ class ReportTests(unittest.TestCase):
 
     def test_markdown_escapes_table_pipes(self):
         out = views.run_markdown(make_report())
-        self.assertIn("a\|b", out)
+        self.assertIn(r"a\|b", out)
         self.assertEqual(out.count("\n| "), 3)
 
     def test_cli_writes_html_and_markdown_for_run_and_compare(self):

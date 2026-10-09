@@ -31,6 +31,7 @@ adapter.
 | **Tests** | Wazuh 4.x detection changes against a JSON suite of sample logs |
 | **Checks** | Rule ID, alert flag, level, decoder, ATT&CK IDs, groups, forbidden rules, sequences |
 | **Reports** | JSON, JUnit XML, a readable offline HTML page and a Markdown summary for CI, plus a baseline vs candidate comparison |
+| **Lints rules** | `ruleguard lint` flags rule XML that loads fine and quietly never matches (regex without `type="pcre2"`, unknown tags, pinned addresses) |
 | **Start fast** | `ruleguard init` writes a starter suite, and a JSON Schema gives you editor checks and autocomplete |
 | **Runs on** | Python 3.10+, no runtime dependencies, offline replay mode for the demo |
 | **Status** | Prototype. Live Wazuh validation is still pending |
@@ -111,6 +112,37 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/farhan6667/wa
 ```
 
 The image runs as a non-root user and contains only RuleGuard. Mount the folder with your suite, and pass the manager token as an environment variable (`-e WAZUH_API_TOKEN`) when you test against a real manager.
+
+## Check your rule files before you load them
+
+Some of the worst Wazuh mistakes parse cleanly and then never match. `ruleguard lint` reads rule XML offline and points at the usual suspects:
+
+```sh
+ruleguard lint examples/rules-with-problems.xml
+```
+
+```text
+warning pcre-syntax-without-type  rule 100200: <regex> uses a character class like [a-z] but has no type="pcre2". The default engine does not support it, so the rule can parse cleanly and still never match.
+warning unknown-element           rule 100203: <made_up_condition> is not a documented element for a rule. An invalid tag can stop the manager from starting ...
+info    pinned-identifier         rule 100204: <srcip> is pinned to a specific value. If that machine is rebuilt or renamed the rule can stop matching without any error ...
+error   duplicate-id              rule 100200: Rule id is defined more than once in the files checked.
+2 errors, 6 warnings, 2 notes
+```
+
+Errors make the command exit with 1, and `--strict` does the same for warnings. Add `--json` or `--markdown` for CI. These are advisory checks: they cannot prove a rule works, so keep running a real suite next to them. The checks follow the [Wazuh regex and rules syntax reference](https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/regex.html), and [docs/wazuh-gotchas.md](docs/wazuh-gotchas.md) explains the failures behind them.
+
+## Notice a rule that quietly stopped matching
+
+Run the suite with `--label` so each report records what it ran on, then compare:
+
+```sh
+ruleguard run suite.json --api https://test-manager.example:55000 --json baseline.json --label "wazuh 4.9.0"
+# upgrade or edit, then
+ruleguard run suite.json --api https://test-manager.example:55000 --json candidate.json --label "wazuh 4.10.0"
+ruleguard compare baseline.json candidate.json --json changes.json --html changes.html
+```
+
+Besides the per case changes, the comparison now counts how many sample events each rule matched in each run, and calls out any rule that dropped to zero. The labels appear in the report, so nobody has to guess which versions were compared.
 
 ## Connect a test manager
 
@@ -226,6 +258,12 @@ Yes. It writes JUnit XML and uses exit codes (0 for clean, 1 for failed checks o
 
 ### How do I write a first suite quickly?
 Run `ruleguard init suite.json`. It writes two sample cases (a login failure that should alert and a healthcheck that should not), and the file points at the JSON Schema so your editor can check keys as you type. Replace the sample events with your own raw log lines.
+
+### How do I check my rule XML for mistakes before loading it?
+Run `ruleguard lint` on the rule files or the folder. It flags a regex that needs `type="pcre2"`, `*` or `+` on a plain character, backslash expressions inside `<match>`, elements that are not documented for rules, duplicate IDs, bad levels and rules pinned to an address. Errors exit with 1. It is an offline, advisory check and does not prove a rule matches.
+
+### How do I notice a rule that quietly stopped matching after an upgrade?
+Run the same suite before and after with `--label` set to the Wazuh version, then `ruleguard compare`. The report lists the rules whose sample-event count fell to zero, which is the quiet failure that is easiest to miss.
 
 ### Does it need a running Wazuh manager?
 Only for real checks. The offline demo replays stored observations and needs nothing installed. Real runs need the logtest API of a Wazuh 4.x manager that you are allowed to test against.

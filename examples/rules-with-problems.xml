@@ -1,0 +1,64 @@
+<!-- Synthetic teaching file for `ruleguard lint`. Every rule below has a problem on purpose.
+     Do not load it on a manager. IDs are invented. -->
+<group name="ruleguard_lint_demo,">
+
+  <!-- Looks right in review, but a character class needs type="pcre2". Without it the rule can load and never match. -->
+  <rule id="100200" level="10">
+    <if_sid>60000</if_sid>
+    <regex>failed login for [a-z]+ from</regex>
+    <description>Demo: character class without type pcre2.</description>
+  </rule>
+
+  <!-- A star on a plain character. The default engine only allows * and + after a backslash expression. -->
+  <rule id="100201" level="8">
+    <if_sid>60000</if_sid>
+    <regex>^error.*timeout</regex>
+    <description>Demo: quantifier on a bare character.</description>
+  </rule>
+
+  <!-- The basic matcher does not understand backslash expressions. -->
+  <rule id="100202" level="8">
+    <if_sid>60000</if_sid>
+    <match>user \d+ locked</match>
+    <description>Demo: backslash expression inside match.</description>
+  </rule>
+
+  <!-- A tag that is not a documented rule element. -->
+  <rule id="100203" level="6">
+    <if_sid>60000</if_sid>
+    <made_up_condition>yes</made_up_condition>
+    <description>Demo: unknown element.</description>
+  </rule>
+
+  <!-- Tuning pinned to an address. It stops matching quietly if the machine is rebuilt. -->
+  <rule id="100204" level="0">
+    <if_sid>100200</if_sid>
+    <srcip>192.0.2.50</srcip>
+    <description>Demo: exception pinned to one address.</description>
+  </rule>
+
+  <!-- Two siblings under one parent, only one is reported when both could match. -->
+  <rule id="100205" level="7">
+    <if_sid>100200</if_sid>
+    <match>probe one</match>
+    <description>Demo: sibling one.</description>
+  </rule>
+  <rule id="100206" level="7">
+    <if_sid>100200</if_sid>
+    <match>probe two</match>
+    <description>Demo: sibling two.</description>
+  </rule>
+
+  <!-- No description, and a level out of range. -->
+  <rule id="100207" level="20">
+    <if_sid>60000</if_sid>
+    <match>something</match>
+  </rule>
+
+  <!-- Same id twice. -->
+  <rule id="100200" level="3">
+    <if_sid>60000</if_sid>
+    <match>duplicate</match>
+    <description>Demo: duplicate id.</description>
+  </rule>
+</group>

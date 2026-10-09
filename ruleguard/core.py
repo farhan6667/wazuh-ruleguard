@@ -175,5 +175,23 @@ def compare(before, after):
         changes.append({"case_id": key[0], "step": key[1], "kind": kind,
                         "before": left.get("actual") if left else None,
                         "after": right.get("actual") if right else None})
+    counts_before, counts_after = _rule_counts(old), _rule_counts(new)
+    rule_counts = [{"rule_id": rid, "before": counts_before.get(rid, 0), "after": counts_after.get(rid, 0)}
+                   for rid in sorted(counts_before.keys() | counts_after.keys())
+                   if counts_before.get(rid, 0) != counts_after.get(rid, 0)]
     return {"schema_version": 1, "before_mode": before.get("mode"),
-            "after_mode": after.get("mode"), "changes": changes}
+            "after_mode": after.get("mode"), "before_label": before.get("label"),
+            "after_label": after.get("label"), "changes": changes,
+            "rule_counts": rule_counts,
+            "dropped_to_zero": [r["rule_id"] for r in rule_counts if r["before"] > 0 and r["after"] == 0]}
+
+
+def _rule_counts(indexed_rows):
+    """How many sample events each rule matched. A rule that goes to zero often means it quietly stopped matching."""
+    counts = {}
+    for row in indexed_rows.values():
+        actual = row.get("actual")
+        if isinstance(actual, dict):
+            rid = actual.get("rule_id") or "(no rule)"
+            counts[rid] = counts.get(rid, 0) + 1
+    return counts

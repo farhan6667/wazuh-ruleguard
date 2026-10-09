@@ -6,6 +6,7 @@ import sys
 import xml.etree.ElementTree as ET
 from importlib import resources
 
+from . import lint as linting
 from . import report as views
 from .backends import APIBackend, ReplayBackend
 from .core import GuardError, compare, load_suite, run_suite
@@ -67,6 +68,11 @@ def main(argv=None):
     validate.add_argument("suite")
     init = commands.add_parser("init", help="Write a starter suite to edit (never overwrites)")
     init.add_argument("path", nargs="?", default="suite.json")
+    lint = commands.add_parser("lint", help="Static checks on Wazuh rule XML for rules that parse but quietly do nothing")
+    lint.add_argument("paths", nargs="+", help="Rule files or folders (all .xml files inside)")
+    lint.add_argument("--strict", action="store_true", help="Exit 1 on warnings too, not only on errors")
+    lint.add_argument("--json", dest="json_path")
+    lint.add_argument("--markdown")
     commands.add_parser("schema", help="Print the JSON Schema for suite files (for editor validation)")
     run = commands.add_parser("run")
     run.add_argument("suite")
@@ -78,6 +84,7 @@ def main(argv=None):
     run.add_argument("--allow-warnings", action="store_true")
     run.add_argument("--json", required=True, dest="json_path")
     run.add_argument("--junit")
+    run.add_argument("--label", help="Free text saved in the report, for example the Wazuh version it ran on")
     run.add_argument("--html")
     run.add_argument("--markdown", help="Markdown summary, for example for $GITHUB_STEP_SUMMARY")
     diff = commands.add_parser("compare")
@@ -100,6 +107,19 @@ def main(argv=None):
                 raise GuardError("Refusing to overwrite an existing file") from None
             print(f"Wrote {target}. Edit the sample events, then run: ruleguard validate {target}")
             return 0
+        if args.command == "lint":
+            files = linting.collect(args.paths)
+            outs = [Path(p).resolve() for p in (args.json_path, args.markdown) if p]
+            if any(o in {f.resolve() for f in files} for o in outs) or len(outs) != len(set(outs)):
+                raise GuardError("Outputs must differ from inputs and each other")
+            findings = linting.lint_paths(args.paths)
+            print(linting.text_report(findings))
+            if args.json_path:
+                write_json(args.json_path, {"schema_version": 1, "summary": linting.summary(findings), "findings": findings})
+            if args.markdown:
+                write_text(args.markdown, linting.markdown(findings))
+            counts = linting.summary(findings)
+            return 1 if counts["error"] or (args.strict and counts["warning"]) else 0
         inputs = [getattr(args, name, None) for name in ("suite", "replay", "before", "after", "ca_file")]
         outputs = [getattr(args, name, None) for name in ("json_path", "junit", "html", "markdown")]
         input_paths = {Path(p).resolve() for p in inputs if p}
@@ -118,6 +138,8 @@ def main(argv=None):
             if args.markdown:
                 write_text(args.markdown, views.compare_markdown(report))
             print(f"{len(report['changes'])} changes; review input_changed separately from behavior_changed")
+            for rid in report["dropped_to_zero"]:
+                print(f"rule {rid} matched no sample events in the second run")
             return 1 if report["changes"] else 0
         suite = load_suite(Path(args.suite))
         if args.replay:
@@ -125,6 +147,10 @@ def main(argv=None):
         else:
             backend = APIBackend(args.api, os.environ.get("WAZUH_API_TOKEN"), args.ca_file, args.timeout)
         report = run_suite(suite, backend, args.allow_warnings)
+        if args.label:
+            label = "".join(ch for ch in args.label if ch.isprintable())[:80].strip()
+            if label:
+                report["label"] = label
         write_json(args.json_path, report)
         if args.junit:
             junit(report, args.junit)
