@@ -19,7 +19,7 @@ which detections moved. Reports work in a terminal, CI job or browser.
 
 Requires Python 3.10 or newer. There are no runtime dependencies.
 
-Version 0.1.0 is a prototype. Local tests cover the client and CLI on Windows with
+Version 0.2.0 is a prototype. Local tests cover the client and CLI on Windows with
 Python 3.12. Live Wazuh validation is still pending, and the demo observations are
 synthetic. This adapter supports the 4.x API contract; Wazuh 5.x needs a different
 adapter.
@@ -30,7 +30,8 @@ adapter.
 |---|---|
 | **Tests** | Wazuh 4.x detection changes against a JSON suite of sample logs |
 | **Checks** | Rule ID, alert flag, level, decoder, ATT&CK IDs, groups, forbidden rules, sequences |
-| **Reports** | JSON, JUnit XML and an offline HTML page, plus a baseline vs candidate comparison |
+| **Reports** | JSON, JUnit XML, a readable offline HTML page and a Markdown summary for CI, plus a baseline vs candidate comparison |
+| **Start fast** | `ruleguard init` writes a starter suite, and a JSON Schema gives you editor checks and autocomplete |
 | **Runs on** | Python 3.10+, no runtime dependencies, offline replay mode for the demo |
 | **Status** | Prototype. Live Wazuh validation is still pending |
 
@@ -78,6 +79,28 @@ it does not evaluate detection rules or establish current engine behavior.
 
 Install the CLI with `python -m pip install .`, then use `ruleguard` instead of
 `python -m ruleguard`.
+
+## What a report looks like
+
+The HTML report is one offline page with no scripts and no remote assets. This is the comparison from the demo above: the healthcheck exception stopped suppressing its alert.
+
+<p align="center"><img src="docs/img/report-compare.webp" width="860" alt="RuleGuard comparison report showing one behavior change: the healthcheck-exception case moved from rule 100101 with no alert to rule 100100 with an alert"></p>
+
+Add `--markdown summary.md` to `run` or `compare` to get the same result as a table you can append to `$GITHUB_STEP_SUMMARY`. The [CI guide](docs/ci.md) has copy-ready workflows.
+
+## Start a suite in a minute
+
+```sh
+ruleguard init suite.json     # writes two sample cases and refuses to overwrite a file
+ruleguard validate suite.json # checks the structure before it touches a manager
+ruleguard schema > suite.schema.json
+```
+
+The starter file points at the project's JSON Schema, so editors such as VS Code can flag a typo in an expectation key as you type. `ruleguard schema` prints the same schema for offline use.
+
+## Use it with Wazuh NoiseLens
+
+The two tools cover both halves of tuning. [Wazuh NoiseLens](https://github.com/farhan6667/wazuh-noiselens) answers "what would this exception hide in my last month of alerts?". Once you have written the exception, RuleGuard answers "do the detections I care about still fire, and does the healthcheck stay quiet?". Keep one sample of each kind in your suite and run both before you change the manager.
 
 ## Connect a test manager
 
@@ -180,6 +203,9 @@ Run the same suite on your current test manager and save the result as `baseline
 
 ### Can I use it in CI?
 Yes. It writes JUnit XML and uses exit codes (0 for clean, 1 for failed checks or differences, 2 for invalid input), so a pipeline can stop until someone reviews the change.
+
+### How do I write a first suite quickly?
+Run `ruleguard init suite.json`. It writes two sample cases (a login failure that should alert and a healthcheck that should not), and the file points at the JSON Schema so your editor can check keys as you type. Replace the sample events with your own raw log lines.
 
 ### Does it need a running Wazuh manager?
 Only for real checks. The offline demo replays stored observations and needs nothing installed. Real runs need the logtest API of a Wazuh 4.x manager that you are allowed to test against.

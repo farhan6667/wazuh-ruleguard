@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/farhan6667/wazuh-ruleguard/main/ruleguard/suite.schema.json",
+  "title": "Wazuh RuleGuard suite",
+  "description": "A set of sample logs and the detection result you expect for each one.",
+  "type": "object",
+  "required": ["schema_version", "cases"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "const": 1 },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Independent scenarios. Events inside one case share a logtest session, so use several events to test a sequence.",
+      "items": {
+        "type": "object",
+        "required": ["id", "events"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "Unique case name, for example healthcheck-exception." },
+          "events": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["event", "expect"],
+              "additionalProperties": false,
+              "properties": {
+                "event": { "type": "string", "minLength": 1, "description": "The original raw log line (the full_log), not the whole alert wrapper." },
+                "location": { "type": "string", "minLength": 1, "description": "Original log location when your rules depend on it. Default: ruleguard." },
+                "log_format": { "type": "string", "minLength": 1, "description": "Default: syslog." },
+                "expect": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": false,
+                  "properties": {
+                    "rule_id": { "type": ["string", "null"], "description": "Expected rule ID, or null for none." },
+                    "level": { "type": "integer", "minimum": 0, "maximum": 16 },
+                    "alert": { "type": "boolean" },
+                    "decoder": { "type": ["string", "null"] },
+                    "forbidden_rule_ids": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "None of these rules may match." },
+                    "groups_contains": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+                    "mitre_contains": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "ATT&CK technique IDs, for example T1110." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

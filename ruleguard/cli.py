@@ -1,11 +1,12 @@
 import argparse
-import html
 import json
 import os
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
+from importlib import resources
 
+from . import report as views
 from .backends import APIBackend, ReplayBackend
 from .core import GuardError, compare, load_suite, run_suite
 
@@ -32,16 +33,31 @@ def junit(report, path):
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
 
 
-def write_html(value, path):
-    escaped = html.escape(json.dumps(value, indent=2))
-    Path(path).write_text("<!doctype html><html lang='en'><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; style-src 'unsafe-inline'\">"
-        "<title>RuleGuard report</title><style>body{background:#101925;color:#e8edf4;font:16px system-ui;"
-        "max-width:1000px;margin:40px auto;padding:20px}pre{white-space:pre-wrap;overflow-wrap:anywhere;"
-        "background:#172538;padding:24px;border-radius:12px}h1{color:#6fe3b1}</style>"
-        "<h1>Wazuh RuleGuard</h1><p>Detection regression report. Mode and failures appear below.</p>"
-        f"<pre>{escaped}</pre></html>", encoding="utf-8")
+def write_text(path, text):
+    Path(path).write_text(text, encoding="utf-8")
+
+
+STARTER = {
+    "schema_version": 1,
+    "cases": [
+        {
+            "id": "unexpected-login-failure",
+            "events": [{
+                "event": "{\"event_type\":\"login_failure\",\"username\":\"demo_user\"}",
+                "location": "ruleguard", "log_format": "syslog",
+                "expect": {"rule_id": "100100", "level": 10, "mitre_contains": ["T1110"]},
+            }],
+        },
+        {
+            "id": "healthcheck-exception",
+            "events": [{
+                "event": "{\"event_type\":\"login_failure\",\"username\":\"healthcheck\"}",
+                "location": "ruleguard", "log_format": "syslog",
+                "expect": {"rule_id": "100101", "alert": False},
+            }],
+        },
+    ],
+}
 
 
 def main(argv=None):
@@ -49,6 +65,9 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     validate = commands.add_parser("validate", help="Check suite before contacting a manager")
     validate.add_argument("suite")
+    init = commands.add_parser("init", help="Write a starter suite to edit (never overwrites)")
+    init.add_argument("path", nargs="?", default="suite.json")
+    commands.add_parser("schema", help="Print the JSON Schema for suite files (for editor validation)")
     run = commands.add_parser("run")
     run.add_argument("suite")
     source = run.add_mutually_exclusive_group(required=True)
@@ -60,15 +79,29 @@ def main(argv=None):
     run.add_argument("--json", required=True, dest="json_path")
     run.add_argument("--junit")
     run.add_argument("--html")
+    run.add_argument("--markdown", help="Markdown summary, for example for $GITHUB_STEP_SUMMARY")
     diff = commands.add_parser("compare")
     diff.add_argument("before")
     diff.add_argument("after")
     diff.add_argument("--json", required=True, dest="json_path")
     diff.add_argument("--html")
+    diff.add_argument("--markdown", help="Markdown summary of the changes")
     args = parser.parse_args(argv)
     try:
+        if args.command == "schema":
+            print(resources.files("ruleguard").joinpath("suite.schema.json").read_text(encoding="utf-8"), end="")
+            return 0
+        if args.command == "init":
+            target = Path(args.path)
+            try:
+                with target.open("x", encoding="utf-8") as stream:
+                    stream.write(json.dumps({"$schema": "https://raw.githubusercontent.com/farhan6667/wazuh-ruleguard/main/ruleguard/suite.schema.json", **STARTER}, indent=2) + "\n")
+            except FileExistsError:
+                raise GuardError("Refusing to overwrite an existing file") from None
+            print(f"Wrote {target}. Edit the sample events, then run: ruleguard validate {target}")
+            return 0
         inputs = [getattr(args, name, None) for name in ("suite", "replay", "before", "after", "ca_file")]
-        outputs = [getattr(args, name, None) for name in ("json_path", "junit", "html")]
+        outputs = [getattr(args, name, None) for name in ("json_path", "junit", "html", "markdown")]
         input_paths = {Path(p).resolve() for p in inputs if p}
         output_paths = [Path(p).resolve() for p in outputs if p]
         if any(p in input_paths for p in output_paths) or len(output_paths) != len(set(output_paths)):
@@ -81,7 +114,9 @@ def main(argv=None):
             report = compare(read_json(args.before), read_json(args.after))
             write_json(args.json_path, report)
             if args.html:
-                write_html(report, args.html)
+                write_text(args.html, views.compare_html(report))
+            if args.markdown:
+                write_text(args.markdown, views.compare_markdown(report))
             print(f"{len(report['changes'])} changes; review input_changed separately from behavior_changed")
             return 1 if report["changes"] else 0
         suite = load_suite(Path(args.suite))
@@ -94,7 +129,9 @@ def main(argv=None):
         if args.junit:
             junit(report, args.junit)
         if args.html:
-            write_html(report, args.html)
+            write_text(args.html, views.run_html(report))
+        if args.markdown:
+            write_text(args.markdown, views.run_markdown(report))
         print(f"{report['mode']}: {report['passed']} passed, {report['failed']} failed/error")
         return 1 if report["failed"] else 0
     except (GuardError, OSError) as exc:

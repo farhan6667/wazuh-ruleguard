@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 from ruleguard.backends import APIBackend, ReplayBackend
-from ruleguard.cli import main, junit, write_html
+from ruleguard import report as views
+from ruleguard.cli import main, junit
 from ruleguard.core import GuardError, check, compare, fingerprint, load_suite, normalize, run_suite
 
 
@@ -127,7 +128,7 @@ class Tests(unittest.TestCase):
         report["results"][0]["case_id"] = "<script>alert(1)</script>"
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "report.html"
-            write_html(report, path)
+            path.write_text(views.run_html(report), encoding="utf-8")
             self.assertNotIn("<script>", path.read_text())
             junit(report, Path(tmp) / "report.xml")
 
