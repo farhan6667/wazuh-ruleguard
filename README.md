@@ -8,8 +8,6 @@
   <img src="https://img.shields.io/badge/status-prototype-00d1ff.svg" alt="Status: prototype">
 </p>
 
-🇵🇰 [اردو میں پڑھیں](README.ur.md)
-
 **Wazuh RuleGuard is an open source command line tool for Python 3.10+ that tests Wazuh 4.x detection rules against a JSON suite of sample logs and tells you which detections changed after a rule edit or a manager upgrade.** Independent project by Syed Farhan Ahmed (SFA) at NexaForge. It is not affiliated with, sponsored by or endorsed by Wazuh Inc.
 
 
