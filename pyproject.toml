@@ -7,7 +7,7 @@ name = "wazuh-ruleguard"
 version = "0.1.0"
 description = "Declarative Wazuh 4.x detection regression tests and upgrade diffs"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 authors = [{name = "Syed Farhan Ahmed"}]
 dependencies = []
 readme = "README.md"

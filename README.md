@@ -1,4 +1,13 @@
-# Wazuh RuleGuard
+<h1 align="center"><img src="docs/img/banner.svg" alt="Wazuh RuleGuard: check whether a rule change breaks the detections you expect" width="100%"></h1>
+
+<p align="center">
+  <a href="https://github.com/farhan6667/wazuh-ruleguard/actions/workflows/ci.yml"><img src="https://github.com/farhan6667/wazuh-ruleguard/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-3776ab.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/runtime%20dependencies-none-2ea44f.svg" alt="No runtime dependencies">
+  <img src="https://img.shields.io/badge/status-prototype-00d1ff.svg" alt="Status: prototype">
+</p>
+
 
 Check whether a Wazuh rule change breaks the detections you expect.
 
@@ -12,6 +21,16 @@ Version 0.1.0 is a prototype. Local tests cover the client and CLI on Windows wi
 Python 3.12. Live Wazuh validation is still pending, and the demo observations are
 synthetic. This adapter supports the 4.x API contract; Wazuh 5.x needs a different
 adapter.
+
+## At a glance
+
+| | |
+|---|---|
+| **Tests** | Wazuh 4.x detection changes against a JSON suite of sample logs |
+| **Checks** | Rule ID, alert flag, level, decoder, ATT&CK IDs, groups, forbidden rules, sequences |
+| **Reports** | JSON, JUnit XML and an offline HTML page, plus a baseline vs candidate comparison |
+| **Runs on** | Python 3.10+, no runtime dependencies, offline replay mode for the demo |
+| **Status** | Prototype. Live Wazuh validation is still pending |
 
 ## Why keep a test corpus?
 
@@ -36,6 +55,10 @@ It omits timestamps, counters, descriptions, JWTs and raw event text.
 
 HTTPS certificates are verified. Custom CA files are supported, redirects are
 blocked and requests aren't retried automatically.
+
+## How it works
+
+<p align="center"><img src="docs/img/how-it-works.svg" width="100%" alt="How Wazuh RuleGuard works, in four steps"></p>
 
 ## Try the offline demo
 
@@ -142,6 +165,32 @@ Contributions most useful before a release: live manager compatibility results w
 and sanitized fixtures, negative cases for common exceptions, and real correlation scenarios.
 Do not upload organization logs or credentials. See [contribution notes](CONTRIBUTING.md) and [security notes](SECURITY.md).
 
-Built by [Syed Farhan Ahmed](https://farhan6667.github.io/portfolio/).
 
 For a walkthrough with expected exit codes, see [the demo guide](docs/demo.md).
+
+## License
+
+[Apache-2.0](LICENSE). See [NOTICE](NOTICE) for the attribution and trademark note.
+
+---
+
+<div align="center">
+
+<a href="https://nexaforge.eu.cc/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/brand/nexaforge-lockup-dark.webp">
+    <img src="docs/img/brand/nexaforge-lockup-light.webp" height="48" alt="NexaForge">
+  </picture>
+</a>
+&nbsp;&nbsp;
+<a href="https://farhan6667.github.io/portfolio/"><img src="docs/img/brand/sfa-logo.webp" height="64" alt="SFA logo"></a>
+
+**Built by [Syed Farhan Ahmed](https://github.com/farhan6667) (SFA)** at **[NexaForge](https://nexaforge.eu.cc/)**<br>
+Cyber security · Vibe coding · Web development and IT infrastructure
+
+[Website](https://nexaforge.eu.cc/) ·
+[LinkedIn](https://www.linkedin.com/in/sfa6667) ·
+[Portfolio](https://farhan6667.github.io/portfolio/) ·
+[Email](mailto:nexaforge.services@gmail.com)
+
+</div>
