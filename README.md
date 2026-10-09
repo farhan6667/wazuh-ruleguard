@@ -8,6 +8,8 @@
   <img src="https://img.shields.io/badge/status-prototype-00d1ff.svg" alt="Status: prototype">
 </p>
 
+**Wazuh RuleGuard is an open source command line tool for Python 3.10+ that tests Wazuh 4.x detection rules against a JSON suite of sample logs and tells you which detections changed after a rule edit or a manager upgrade.** Independent project by Syed Farhan Ahmed (SFA) at NexaForge. It is not affiliated with, sponsored by or endorsed by Wazuh Inc.
+
 
 Check whether a Wazuh rule change breaks the detections you expect.
 
@@ -167,6 +169,32 @@ Do not upload organization logs or credentials. See [contribution notes](CONTRIB
 
 
 For a walkthrough with expected exit codes, see [the demo guide](docs/demo.md).
+
+## Frequently asked questions
+
+### How do I test Wazuh rules before deploying them?
+Write a JSON suite with sample logs and the rule ID, level or decoder you expect for each one. Run `ruleguard run` against a disposable Wazuh 4.x test manager and it checks every sample through the logtest API. You can also replay saved results offline to learn the format.
+
+### How can I check that a Wazuh upgrade did not change my detections?
+Run the same suite on your current test manager and save the result as `baseline.json`. Run it again on the candidate manager, then use `ruleguard compare`. The command exits with 1 and writes a report when a rule ID, alert flag or decoder moved. Review each change, because a different rule ID is not automatically a regression.
+
+### Can I use it in CI?
+Yes. It writes JUnit XML and uses exit codes (0 for clean, 1 for failed checks or differences, 2 for invalid input), so a pipeline can stop until someone reviews the change.
+
+### Does it need a running Wazuh manager?
+Only for real checks. The offline demo replays stored observations and needs nothing installed. Real runs need the logtest API of a Wazuh 4.x manager that you are allowed to test against.
+
+### Does it work with Wazuh 5?
+No. The adapter follows the 4.x API contract, and 5.x would need a different one.
+
+### Where do my logs go?
+Only to the manager you name, over HTTPS with certificate checks. Reports leave out raw event text and tokens, but case names and rule metadata can still be sensitive, so look at a report before you share it.
+
+### Is it ready for production?
+Not yet. It is a prototype: local tests pass, live Wazuh validation is still pending, and the demo data is synthetic.
+
+### Is it an official Wazuh tool?
+No. It is an independent project and is not affiliated with Wazuh Inc.
 
 ## License
 

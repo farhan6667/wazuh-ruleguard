@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Wazuh RuleGuard"
+abstract: "Command line tool that tests Wazuh 4.x detection rules against a JSON suite of sample logs and reports which detections changed after a rule edit or upgrade."
+type: software
+authors:
+  - family-names: "Ahmed"
+    given-names: "Syed Farhan"
+    affiliation: "NexaForge"
+    email: "nexaforge.services@gmail.com"
+repository-code: "https://github.com/farhan6667/wazuh-ruleguard"
+url: "https://nexaforge.eu.cc/"
+license: Apache-2.0
+version: "0.1.0"
+date-released: "2026-10-05"
+keywords:
+  - wazuh
+  - siem
+  - detection engineering
+  - regression testing
+  - logtest
+  - soc
