@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question or share an idea
+    url: https://github.com/farhan6667/wazuh-ruleguard/discussions
+    about: Not everything needs an issue. Start a discussion.
+  - name: Report a security problem
+    url: https://github.com/farhan6667/wazuh-ruleguard/security/advisories/new
+    about: Please report vulnerabilities privately.

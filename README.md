@@ -203,6 +203,16 @@ Do not upload organization logs or credentials. See [contribution notes](CONTRIB
 
 For a walkthrough with expected exit codes, see [the demo guide](docs/demo.md).
 
+## Contribute
+
+This project is free and built in the open, and I would like it to be shaped by people who run Wazuh every day. The most useful things you can send:
+
+- a **compatibility report** from a real Wazuh 4.x manager (the demos are synthetic, so this is the biggest gap),
+- a **synthetic example** that matches a log source you know,
+- a fix, a test, or a clearer sentence in the docs.
+
+Start with a [good first issue](https://github.com/farhan6667/wazuh-ruleguard/labels/good%20first%20issue) or say hello in [Discussions](https://github.com/farhan6667/wazuh-ruleguard/discussions). The [contributing guide](CONTRIBUTING.md) explains the two minute setup. It carries the `hacktoberfest` topic, and pull requests are welcome whether or not you take part.
+
 ## Frequently asked questions
 
 ### How do I test Wazuh rules before deploying them?
