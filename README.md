@@ -265,6 +265,8 @@ This project is free and built in the open, and I would like it to be shaped by 
 
 Start with a [good first issue](https://github.com/farhan6667/wazuh-ruleguard/labels/good%20first%20issue) or say hello in [Discussions](https://github.com/farhan6667/wazuh-ruleguard/discussions). The [contributing guide](CONTRIBUTING.md) explains the two minute setup. It carries the `hacktoberfest` topic, and pull requests are welcome whether or not you take part.
 
+If your company can help with test infrastructure, hosting, tools or funding, the [sponsor page](https://github.com/farhan6667/farhan6667/blob/main/SPONSOR.md) explains how. GitHub Sponsors is not available in Pakistan, so it works by email.
+
 ## Frequently asked questions
 
 ### How do I test Wazuh rules before deploying them?
