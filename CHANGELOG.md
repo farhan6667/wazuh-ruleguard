@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0: 2026-10-09
 
+- Urdu README (`README.ur.md`).
 - `ruleguard coverage` shows which ATT&CK techniques a suite asserts and which cases assert none. `--want` lists techniques you expect to be tested and exits with 1 when one is missing. `--json` and `--markdown` write reports.
 - `ruleguard lint` checks Wazuh rule XML offline for rules that load and quietly never match: PCRE-only syntax without `type="pcre2"`, `*` or `+` on a plain character, backslash expressions in `<match>`, undocumented rule elements, duplicate IDs, bad levels, missing descriptions, and notes for rules pinned to an address or hostname and for sibling rules. Errors exit with 1, `--strict` also fails on warnings, `--json` and `--markdown` write reports.
 - `compare` now counts the sample events each rule matched in each run and lists rules that dropped to zero.

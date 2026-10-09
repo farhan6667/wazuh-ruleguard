@@ -1,3 +1,3 @@
-include LICENSE NOTICE README.md CODE_OF_CONDUCT.md CONTRIBUTING.md SECURITY.md CHANGELOG.md
+include LICENSE NOTICE README.md README.ur.md CODE_OF_CONDUCT.md CONTRIBUTING.md SECURITY.md CHANGELOG.md
 recursive-include examples *.json *.jsonl *.xml
 recursive-include docs *.md
