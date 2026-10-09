@@ -102,6 +102,16 @@ The starter file points at the project's JSON Schema, so editors such as VS Code
 
 The two tools cover both halves of tuning. [Wazuh NoiseLens](https://github.com/farhan6667/wazuh-noiselens) answers "what would this exception hide in my last month of alerts?". Once you have written the exception, RuleGuard answers "do the detections I care about still fire, and does the healthcheck stay quiet?". Keep one sample of each kind in your suite and run both before you change the manager.
 
+## Run it in a container
+
+Each release publishes an image to GitHub Packages, so you can run RuleGuard without installing Python:
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/farhan6667/wazuh-ruleguard   run examples/suite.json --replay examples/synthetic-before.json --json result.json
+```
+
+The image runs as a non-root user and contains only RuleGuard. Mount the folder with your suite, and pass the manager token as an environment variable (`-e WAZUH_API_TOKEN`) when you test against a real manager.
+
 ## Connect a test manager
 
 Set `WAZUH_API_TOKEN` to an existing, temporary Wazuh API JWT using your normal secret
