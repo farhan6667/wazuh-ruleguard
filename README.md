@@ -31,6 +31,7 @@ adapter.
 | **Tests** | Wazuh 4.x detection changes against a JSON suite of sample logs |
 | **Checks** | Rule ID, alert flag, level, decoder, ATT&CK IDs, groups, forbidden rules, sequences |
 | **Reports** | JSON, JUnit XML, a readable offline HTML page and a Markdown summary for CI, plus a baseline vs candidate comparison |
+| **Shows coverage** | `ruleguard coverage` lists the ATT&CK techniques your suite actually tests, and which techniques you wanted but never tested |
 | **Lints rules** | `ruleguard lint` flags rule XML that loads fine and quietly never matches (regex without `type="pcre2"`, unknown tags, pinned addresses) |
 | **Start fast** | `ruleguard init` writes a starter suite, and a JSON Schema gives you editor checks and autocomplete |
 | **Runs on** | Python 3.10+, no runtime dependencies, offline replay mode for the demo |
@@ -130,6 +131,25 @@ error   duplicate-id              rule 100200: Rule id is defined more than once
 ```
 
 Errors make the command exit with 1, and `--strict` does the same for warnings. Add `--json` or `--markdown` for CI. These are advisory checks: they cannot prove a rule works, so keep running a real suite next to them. The checks follow the [Wazuh regex and rules syntax reference](https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/regex.html), and [docs/wazuh-gotchas.md](docs/wazuh-gotchas.md) explains the failures behind them.
+
+## Which ATT&CK techniques do your tests cover?
+
+A suite can pass and still test very little. `ruleguard coverage` reads the `mitre_contains` expectations in your suite and shows what is actually asserted:
+
+```sh
+ruleguard coverage suite.json --want T1110 --want T1558.003
+```
+
+```text
+3 cases, 1 technique asserted
+  T1110      unexpected-login-failure
+Cases that assert no technique: healthcheck-exception, unrelated-event
+Wanted but not tested: T1558.003
+```
+
+It exits with 1 when a technique you listed with `--want` has no test, so a pipeline can keep your purple team goals honest. A wanted parent technique such as `T1558` counts as tested when any of its sub-techniques is asserted. The command only reads the suite: it does not prove that the rules behind those tests work, which is what `run` is for.
+
+**Purple team workflow.** Run the attack in a lab, capture the raw log line your sensors produced, and add it to the suite with the detection you expect. A lab such as [Lab4PurpleSec](https://github.com/0xMR007/Lab4PurpleSec) (MIT licensed, with web exploitation, Kerberoasting and AS-REP roasting scenarios and a Wazuh SIEM) is a good place to generate real events. Keep the lines that matter, strip anything identifying, and from then on a rule change cannot quietly lose that detection.
 
 ## Notice a rule that quietly stopped matching
 
@@ -264,6 +284,9 @@ Run `ruleguard lint` on the rule files or the folder. It flags a regex that need
 
 ### How do I notice a rule that quietly stopped matching after an upgrade?
 Run the same suite before and after with `--label` set to the Wazuh version, then `ruleguard compare`. The report lists the rules whose sample-event count fell to zero, which is the quiet failure that is easiest to miss.
+
+### How do I know which ATT&CK techniques my tests cover?
+Run `ruleguard coverage suite.json`. It lists the techniques your cases assert through `mitre_contains`, the cases that assert none, and with `--want T1110,T1558.003` the techniques you expected but never tested (exit code 1). It only reads the suite and does not prove that a rule works.
 
 ### Does it need a running Wazuh manager?
 Only for real checks. The offline demo replays stored observations and needs nothing installed. Real runs need the logtest API of a Wazuh 4.x manager that you are allowed to test against.

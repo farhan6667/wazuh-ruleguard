@@ -6,6 +6,7 @@ import sys
 import xml.etree.ElementTree as ET
 from importlib import resources
 
+from . import coverage as cover
 from . import lint as linting
 from . import report as views
 from .backends import APIBackend, ReplayBackend
@@ -73,6 +74,11 @@ def main(argv=None):
     lint.add_argument("--strict", action="store_true", help="Exit 1 on warnings too, not only on errors")
     lint.add_argument("--json", dest="json_path")
     lint.add_argument("--markdown")
+    cov = commands.add_parser("coverage", help="Show which ATT&CK techniques a suite tests, and which wanted ones it does not")
+    cov.add_argument("suite")
+    cov.add_argument("--want", action="append", help="Technique IDs you expect to be tested, repeatable or comma separated, for example T1110,T1558.003")
+    cov.add_argument("--json", dest="json_path")
+    cov.add_argument("--markdown")
     commands.add_parser("schema", help="Print the JSON Schema for suite files (for editor validation)")
     run = commands.add_parser("run")
     run.add_argument("suite")
@@ -107,6 +113,17 @@ def main(argv=None):
                 raise GuardError("Refusing to overwrite an existing file") from None
             print(f"Wrote {target}. Edit the sample events, then run: ruleguard validate {target}")
             return 0
+        if args.command == "coverage":
+            outs = [Path(p).resolve() for p in (args.json_path, args.markdown) if p]
+            if Path(args.suite).resolve() in outs or len(outs) != len(set(outs)):
+                raise GuardError("Outputs must differ from inputs and each other")
+            report = cover.coverage(load_suite(Path(args.suite)), cover.parse_wanted(args.want))
+            print(cover.text_report(report))
+            if args.json_path:
+                write_json(args.json_path, report)
+            if args.markdown:
+                write_text(args.markdown, cover.markdown(report))
+            return 1 if report["wanted_missing"] else 0
         if args.command == "lint":
             files = linting.collect(args.paths)
             outs = [Path(p).resolve() for p in (args.json_path, args.markdown) if p]
