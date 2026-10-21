@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.3: 2026-10-22
+
+- **Fixed `examples/php2shell_indicators.xml` so it actually loads.** Five `<field>` conditions
+  used alternation inside a group, such as `\.(php|phtml|php5)$` and `^(sh|bash|...)$`, without
+  `type="pcre2"`. On a live Wazuh 4.14.7 manager `wazuh-analysisd -t` rejects the whole file
+  (error 5107 "Syntax error on tag", then 1220 "Error loading the rules"), so anyone who loaded the
+  0.3.2 example and restarted would have had a manager that would not start. All five now carry
+  `type="pcre2"`. Proven one field at a time on a live engine: each fix moved the error to the
+  next field, and with all five fixed the file loads with exit code 0.
+- New `ruleguard lint` error, `group-alternation-without-pcre2`, for exactly that construct in
+  `<field>` and `<regex>`. It is an error, not a warning, because the result is a manager that
+  will not start rather than a rule that quietly never matches. On the 0.3.2 example it reports
+  the same five fields the live engine rejected, and nothing else.
+- New lint error `self-counting-group`: a frequency rule whose `<if_matched_group>` names a group
+  the rule itself belongs to. Rules inherit the names of the enclosing `<group name="...">`, so
+  this can happen without the rule having its own `<group>` tag.
+- New lint error `unknown-decoder` for `<decoded_as>syslog</decoded_as>`: there is no decoder by
+  that name in the stock 4.x ruleset, and the manager rejects the file.
+- New lint note `audit-command-parent` for children of stock rule 80792 ("Audit: Command"): it
+  only fires when `audit.key` is listed in `etc/lists/audit-keys` with the value `command`, so
+  events tagged with a custom audit key never reach it.
+- `ruleguard/__init__.py` reported version 0.3.0 while the package was 0.3.2. Both are now 0.3.3.
+
 ## 0.3.2: 2026-10-22
 
 - Fixed `examples/php2shell_indicators.xml`: its php-fpm crash frequency rule referenced its own

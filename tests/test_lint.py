@@ -61,6 +61,34 @@ class PatternChecks(unittest.TestCase):
 
 
 class StructureChecks(unittest.TestCase):
+    def test_group_alternation_without_pcre2_is_a_load_blocking_error(self):
+        # Seen on Wazuh 4.14.7: analysisd error 5107 then 1220, the whole file is rejected.
+        for tag in ("<field name='file'>\\.(php|phtml)$</field>", "<regex>^(sh|bash)$</regex>"):
+            with self.subTest(tag=tag):
+                self.assertIn("group-alternation-without-pcre2", codes(rules(rule(tag))))
+        self.assertNotIn("group-alternation-without-pcre2",
+                         codes(rules(rule("<field name='file' type='pcre2'>\\.(php|phtml)$</field>"))))
+        self.assertNotIn("group-alternation-without-pcre2", codes(rules(rule("<match>(php-fpm)</match>"))))
+
+    def test_frequency_rule_counting_its_own_group_is_flagged(self):
+        own = "<rule id='100301' level='8' frequency='5' timeframe='120'><if_matched_group>crash</if_matched_group>" \
+              "<group>crash,</group><description>d</description></rule>"
+        self.assertIn("self-counting-group", codes(rules(own)))
+        inherited = "<group name='crash,'><rule id='100302' level='8' frequency='5' timeframe='120'>" \
+                    "<if_matched_group>crash</if_matched_group><description>d</description></rule></group>"
+        self.assertIn("self-counting-group", codes(inherited))
+        fine = "<rule id='100303' level='8' frequency='5' timeframe='120'><if_matched_group>crash</if_matched_group>" \
+               "<group>burst,</group><description>d</description></rule>"
+        self.assertNotIn("self-counting-group", codes(rules(fine)))
+
+    def test_decoded_as_syslog_is_flagged(self):
+        self.assertIn("unknown-decoder", codes(rules(rule("<decoded_as>syslog</decoded_as>"))))
+        self.assertNotIn("unknown-decoder", codes(rules(rule("<decoded_as>sshd</decoded_as>"))))
+
+    def test_child_of_audit_command_rule_gets_a_note(self):
+        text = rules("<rule id='100304' level='5'><if_sid>80792</if_sid><description>d</description></rule>")
+        self.assertIn("audit-command-parent", codes(text))
+
     def test_unknown_element_warns_and_known_ones_do_not(self):
         self.assertIn("unknown-element", codes(rules(rule("<made_up>x</made_up>"))))
         self.assertNotIn("unknown-element", codes(rules(rule("<same_srcip /><different_user /><mitre><id>T1110</id></mitre>"))))

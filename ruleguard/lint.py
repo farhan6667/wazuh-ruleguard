@@ -36,6 +36,11 @@ PCRE_ONLY = [
     (re.compile(r"[*+?]\?|[*+?]\+"), "a lazy or possessive quantifier"),
 ]
 BACKSLASH_EXPR = re.compile(r"\\.")
+# Alternation inside a group, such as \.(php|phtml)$. Seen on a live Wazuh 4.14.7 manager to make
+# wazuh-analysisd reject the whole rule file (error 5107, then 1220 "Error loading the rules"), which
+# stops the manager from starting. Worse than a rule that silently never matches, so it is an error.
+GROUP_ALTERNATION = re.compile(r"\([^()]*\|[^()]*\)")
+OS_REGEX_ELEMENTS = {"field", "regex"}
 
 
 class Finding(dict):
@@ -58,6 +63,12 @@ def _pattern_findings(path, rule_id, element):
     if "pcre2" in engine:
         return []
     out = []
+    if element.tag in OS_REGEX_ELEMENTS and GROUP_ALTERNATION.search(text):
+        out.append(_finding("error", "group-alternation-without-pcre2", path, rule_id,
+                            f"<{element.tag}> has alternation inside a group, like (a|b), but no type=\"pcre2\". The default "
+                            "engine cannot compile it: wazuh-analysisd rejects the whole rule file and the manager will not "
+                            "start. Add type=\"pcre2\"."))
+        return out
     for rx, what in PCRE_ONLY:
         if rx.search(text):
             out.append(_finding("warning", "pcre-syntax-without-type", path, rule_id,
@@ -81,6 +92,7 @@ def lint_text(text, path="<text>"):
     except ET.ParseError as exc:
         raise GuardError(f"Cannot parse {Path(str(path)).name}: {exc}") from None
     findings, seen, parents = [], {}, {}
+    parent_of = {child: parent for parent in root.iter() for child in parent}
     for rule in root.iter("rule"):
         rule_id = rule.get("id")
         if not rule_id or not rule_id.isdigit():
@@ -106,6 +118,11 @@ def lint_text(text, path="<text>"):
             if child.tag == "field" and (child.get("name") or "").startswith(("agent.", "agent_")):
                 findings.append(_finding("info", "pinned-identifier", path, rule_id,
                                          "A field condition on an agent identifier can rot after rebuilds. Check it still matches."))
+            if child.tag == "decoded_as" and (child.text or "").strip() == "syslog":
+                findings.append(_finding("error", "unknown-decoder", path, rule_id,
+                                         "There is no decoder named \"syslog\" in the stock Wazuh 4.x ruleset, and wazuh-analysisd "
+                                         "rejects the file (Invalid decoder name). For a syslog-style line, match the program with "
+                                         "<program_name> or chain from the decoder that actually handles it."))
             if child.tag in ("if_sid", "if_matched_sid"):
                 refs = [p for p in re.split(r"[\s,]+", (child.text or "").strip()) if p]
                 if rule_id in refs:
@@ -113,9 +130,26 @@ def lint_text(text, path="<text>"):
                                              f"<{child.tag}> references the rule's own id ({rule_id}). Wazuh matches a rule against an "
                                              "earlier rule's prior alerts, never its own: this can never fire, and a manager may reject "
                                              "it as circular. Point it at the id of the rule that decodes the underlying single event."))
+                if child.tag == "if_sid" and "80792" in refs:
+                    findings.append(_finding("info", "audit-command-parent", path, rule_id,
+                                             "Stock rule 80792 (\"Audit: Command\") only fires when audit.key is listed in "
+                                             "etc/lists/audit-keys with the value \"command\". Events tagged with your own audit "
+                                             "key never reach it, so a child of 80792 can silently never fire. Check your key is "
+                                             "in that list, or chain from <if_group>audit</if_group> instead."))
                 if child.tag == "if_sid":
                     for parent in refs:
                         parents.setdefault(parent, []).append(rule_id)
+        counted = (rule.findtext("if_matched_group") or "").strip()
+        if counted:
+            own = {g.strip() for g in (rule.findtext("group") or "").split(",") if g.strip()}
+            wrapper = parent_of.get(rule)
+            if wrapper is not None and wrapper.tag == "group":
+                own |= {g.strip() for g in (wrapper.get("name") or "").split(",") if g.strip()}
+            if counted in own:
+                findings.append(_finding("error", "self-counting-group", path, rule_id,
+                                         f"The rule counts <if_matched_group>{counted}</if_matched_group> but is itself in group "
+                                         f"\"{counted}\" (directly or through the enclosing <group name>, which rules inherit). Its "
+                                         "own alerts feed its own count. Keep the frequency rule out of the group it counts."))
         if rule.find("description") is None and rule.get("noalert") != "1":
             findings.append(_finding("warning", "no-description", path, rule_id, "The rule has no <description>, so its alerts will be hard to read."))
     for parent, kids in sorted(parents.items()):
