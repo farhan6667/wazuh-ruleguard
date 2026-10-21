@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Rewrote the README to be scannable: a short "what it does" list, a "what's new" list for the
+  current release, a 30 second quick start up top, and everything else (CI guide, suite contract,
+  limits, related tools) folded into collapsed sections. No content removed, only reordered and
+  de-duplicated.
+- Replaced the banner, the "how it works" diagram and the social preview card. All three were
+  hand-coded flat SVGs or a generic dark-navy graphic; they are now a Wazuh-blue glass look (the
+  product's own palette) with the real Wazuh wordmark and a trademark note, built from generated
+  art composited with real text in HTML, never text drawn by an image model.
+- Added the Wazuh trademark note to NOTICE, next to the existing NexaForge/SFA mark notice.
+
 ## 0.3.4: 2026-10-22
 
 - **Corrected three rules in `examples/php2shell_indicators.xml` that would not have fired as
