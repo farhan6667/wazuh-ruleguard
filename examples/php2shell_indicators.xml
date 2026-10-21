@@ -34,8 +34,8 @@
        a newly added file (enable alert_new_files in your syscheck config). -->
   <rule id="100210" level="12">
     <if_sid>554</if_sid>
-    <field name="file">\.(php|phtml|php5)$</field>
-    <field name="uname_after">^(www-data|php-fpm|apache|nginx)$</field>
+    <field name="file" type="pcre2">\.(php|phtml|php5)$</field>
+    <field name="uname_after" type="pcre2">^(www-data|php-fpm|apache|nginx)$</field>
     <description>Demo: new PHP file written to disk by the web server's own account.</description>
     <mitre><id>T1505.003</id></mitre>
   </rule>
@@ -46,8 +46,8 @@
        NOT VERIFIED against a default decoder: if_sid and the field names are
        placeholders for whatever exec-monitoring source you actually run. -->
   <rule id="100211" level="13">
-    <field name="parent_process">^(php-fpm|apache2|httpd|nginx)$</field>
-    <field name="process">^(sh|bash|dash|nc|curl|wget)$</field>
+    <field name="parent_process" type="pcre2">^(php-fpm|apache2|httpd|nginx)$</field>
+    <field name="process" type="pcre2">^(sh|bash|dash|nc|curl|wget)$</field>
     <description>Demo: shell or outbound tool spawned by the web server process. Adapt if_sid and
       the field names to your actual exec-monitoring decoder (auditd, Sysmon for Linux, or an
       EDR agent); this has not been checked against any one of them.</description>
@@ -64,7 +64,7 @@
        field names are placeholders for your actual syslog decoder. -->
   <rule id="100212" level="5">
     <field name="program_name">^php-fpm$</field>
-    <field name="message">(segfault|SIGSEGV|out of memory|oom-killer)</field>
+    <field name="message" type="pcre2">(segfault|SIGSEGV|out of memory|oom-killer)</field>
     <description>Demo: a single php-fpm crash or OOM kill line. Adapt if_sid and the field names
       to your actual syslog decoder; this has not been checked against any one of them.</description>
   </rule>
