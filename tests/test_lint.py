@@ -27,6 +27,9 @@ class PatternChecks(unittest.TestCase):
     def test_clean_example_has_no_findings(self):
         self.assertEqual(lint.lint_paths([str(EXAMPLES / "local_rules.xml")]), [])
 
+    def test_php2shell_example_has_no_findings(self):
+        self.assertEqual(lint.lint_paths([str(EXAMPLES / "php2shell_indicators.xml")]), [])
+
     def test_character_class_needs_pcre2(self):
         self.assertIn("pcre-syntax-without-type", codes(rules(rule("<regex>for [a-z]+ from</regex>"))))
         self.assertNotIn("pcre-syntax-without-type", codes(rules(rule("<regex type='pcre2'>for [a-z]+ from</regex>"))))

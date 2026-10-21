@@ -185,6 +185,13 @@ rules, restart services, change production settings, or authenticate with userna
 For the teaching example, `examples/local_rules.xml` contains custom rule IDs that must be
 checked for collisions before use. Its expected output still needs live verification.
 
+`examples/php2shell_indicators.xml` is the same kind of teaching example, written after PHP's
+21 October 2026 emergency patch for CVE-2026-109618 and CVE-2026-109619 (two unauthenticated RCE
+bugs in PHP core, fixed in 8.5.12, 8.4.27, 8.3.36 and 8.2.35). It has no exploit code: three
+post-compromise indicator patterns (a PHP file written by the web server's own account, a shell
+spawned by a web server process, a burst of php-fpm crashes) to adapt to your own decoders and
+prove out with `ruleguard run` before you trust them on a manager.
+
 Use a account with only the required permissions authorized for logtest and session cleanup. The existing JWT is
 used only on the specified HTTPS origin; environment proxies are ignored. No insecure TLS
 switch is provided. Long suites may require a JWT lifetime that covers the run; a failed request

@@ -1,0 +1,44 @@
+<!-- Synthetic teaching example. Review and load on a disposable Wazuh 4.x manager.
+     Check IDs are unused. These rules have not been validated against a live engine.
+
+     Written after PHP's 21 October 2026 emergency release for CVE-2026-109618 and
+     CVE-2026-109619 (nicknamed "PHP2Shell"), two unauthenticated RCE bugs in PHP
+     core affecting PHP-FPM, mod_php, php-cgi, FrankenPHP and LiteSpeed. Fixed in
+     8.5.12, 8.4.27, 8.3.36 and 8.2.35. This file contains no exploit code: it is
+     three post-compromise indicator patterns to adapt to your own decoders and
+     log sources, then prove out with `ruleguard run` before trusting them. -->
+<group name="php2shell_indicators,">
+  <!-- 1. A new PHP (or other executable) file appears inside a web root, written by
+       the web server's own account. A legitimate deploy writes these as the deploy
+       user, not as www-data/php-fpm/apache at request time, so this is a plausible
+       webshell-drop signal. Adapt the path and field names to your FIM/syscheck setup. -->
+  <rule id="100200" level="12">
+    <if_sid>550</if_sid>
+    <field name="file">\.(php|phtml|php5)$</field>
+    <field name="uname_after">^(www-data|php-fpm|apache|nginx)$</field>
+    <description>Demo: new PHP file written to disk by the web server's own account.</description>
+    <mitre><id>T1505.003</id></mitre>
+  </rule>
+
+  <!-- 2. A shell spawned with a web-server process as its parent. A worker handling
+       plain PHP requests normally never forks sh/bash; after PHP2Shell-class RCE,
+       the dropped shell runs as whatever user php-fpm/apache/nginx runs as. -->
+  <rule id="100201" level="13">
+    <if_sid>530</if_sid>
+    <field name="parent_process">^(php-fpm|apache2|httpd|nginx)$</field>
+    <field name="process">^(sh|bash|dash|nc|curl|wget)$</field>
+    <description>Demo: shell or outbound tool spawned by the web server process.</description>
+    <mitre><id>T1059.004</id></mitre>
+  </rule>
+
+  <!-- 3. A burst of php-fpm worker crashes or out-of-memory kills in a short window.
+       Both CVEs are memory-corruption bugs (OOM cleanup and use-after-free), so
+       repeated crashes right before a webshell appears is a plausible precursor,
+       not proof on its own, pair it with rules 100200/100201 above. -->
+  <rule id="100202" level="8" frequency="5" timeframe="120">
+    <if_matched_sid>100202</if_matched_sid>
+    <field name="program_name">^php-fpm$</field>
+    <field name="message">(segfault|SIGSEGV|out of memory|oom-killer)</field>
+    <description>Demo: repeated php-fpm crashes or OOM kills in a 2 minute window.</description>
+  </rule>
+</group>

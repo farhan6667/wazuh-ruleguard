@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Removed the Urdu README that shipped in 0.3.0. The project documentation stays in plain English for an international audience.
+- New `examples/php2shell_indicators.xml`: a teaching example for CVE-2026-109618 and CVE-2026-109619
+  (PHP core RCE, fixed in 8.5.12, 8.4.27, 8.3.36, 8.2.35). Three post-compromise indicator patterns,
+  no exploit code. It lints clean with `ruleguard lint`; its expected output still needs live
+  verification on a manager, same as the existing teaching example.
 
 ## 0.3.0: 2026-10-09
 
