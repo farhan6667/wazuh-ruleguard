@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "new-php-file-by-webserver-account",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_REAL_SYSCHECK_NEW_FILE_EVENT_FOR_A_DOT_PHP_PATH_OWNED_BY_YOUR_WEB_SERVER_ACCOUNT",
+          "expect": {
+            "rule_id": "100210",
+            "level": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "new-php-file-by-deploy-user-should-not-alert-at-this-rule",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_REAL_SYSCHECK_NEW_FILE_EVENT_FOR_A_DOT_PHP_PATH_OWNED_BY_YOUR_DEPLOY_ACCOUNT",
+          "expect": {
+            "forbidden_rule_ids": ["100210"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ncat-launched-from-docroot",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_FULL_AUDITD_EXECVE_RECORD_GROUP_INCLUDING_ITS_TRAILING_RECORD_FOR_NCAT_RUN_FROM_YOUR_DOCROOT",
+          "expect": {
+            "rule_id": "100211",
+            "level": 13
+          }
+        }
+      ]
+    },
+    {
+      "id": "sh_from_php_exec_is_routine_should_not_alert",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_FULL_AUDITD_EXECVE_RECORD_GROUP_FOR_AN_ORDINARY_SH_C_COMMAND_YOUR_APP_RUNS_NORMALLY",
+          "expect": {
+            "forbidden_rule_ids": ["100211"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "kernel-segfault-naming-php-fpm",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_REAL_KERNEL_SEGFAULT_LINE_THAT_NAMES_PHP_FPM_AS_SEEN_BY_YOUR_MANAGER",
+          "expect": {
+            "rule_id": "100212",
+            "level": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "kernel-oom-kill-naming-php-fpm",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_REAL_KERNEL_OOM_KILL_LINE_THAT_NAMES_PHP_FPM_AS_SEEN_BY_YOUR_MANAGER",
+          "expect": {
+            "rule_id": "100214",
+            "level": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "unrelated-kernel-segfault-should-not-alert-at-this-rule",
+      "events": [
+        {
+          "event": "REPLACE_WITH_A_REAL_KERNEL_SEGFAULT_LINE_FOR_A_DIFFERENT_PROCESS_NOT_PHP_FPM",
+          "expect": {
+            "forbidden_rule_ids": ["100212", "100214"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "five-crashes-in-two-minutes-trips-the-frequency-rule",
+      "events": [
+        {"event": "REPLACE_WITH_REAL_EVENT_1_OF_5_WITHIN_2_MINUTES", "expect": {"forbidden_rule_ids": ["100213"]}},
+        {"event": "REPLACE_WITH_REAL_EVENT_2_OF_5_WITHIN_2_MINUTES", "expect": {"forbidden_rule_ids": ["100213"]}},
+        {"event": "REPLACE_WITH_REAL_EVENT_3_OF_5_WITHIN_2_MINUTES", "expect": {"forbidden_rule_ids": ["100213"]}},
+        {"event": "REPLACE_WITH_REAL_EVENT_4_OF_5_WITHIN_2_MINUTES", "expect": {"forbidden_rule_ids": ["100213"]}},
+        {
+          "event": "REPLACE_WITH_REAL_EVENT_5_OF_5_WITHIN_2_MINUTES",
+          "expect": {
+            "rule_id": "100213",
+            "level": 8
+          }
+        }
+      ]
+    }
+  ]
+}

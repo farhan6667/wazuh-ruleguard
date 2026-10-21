@@ -185,25 +185,30 @@ rules, restart services, change production settings, or authenticate with userna
 For the teaching example, `examples/local_rules.xml` contains custom rule IDs that must be
 checked for collisions before use. Its expected output still needs live verification.
 
-<img src="docs/img/php2shell-announce.webp" alt="Wazuh RuleGuard v0.3.3: a PHP2Shell detection teaching example for CVE-2026-109618 and CVE-2026-109619, no exploit code, verified to load on a live Wazuh 4.14.7 manager" width="100%">
+<img src="docs/img/php2shell-announce.webp" alt="Wazuh RuleGuard v0.3.4: a PHP2Shell detection teaching example for CVE-2026-109618 and CVE-2026-109619, no exploit code, corrected against live wazuh-logtest findings" width="100%">
 
 `examples/php2shell_indicators.xml` is the same kind of teaching example, written after PHP's
 21 October 2026 emergency patch for CVE-2026-109618 and CVE-2026-109619 (two unauthenticated RCE
-bugs in PHP core, fixed in 8.5.12, 8.4.27, 8.3.36 and 8.2.35). It has no exploit code: three
-post-compromise indicator patterns (a PHP file written by the web server's own account, a shell
-spawned by a web server process, a burst of php-fpm crashes) to adapt to your own decoders and
-prove out with `ruleguard run` before you trust them on a manager. As of 0.3.3 it has been loaded
-on a live Wazuh 4.14.7 manager with `wazuh-analysisd -t` and exits 0, so the file itself parses
-and loads cleanly. That is not the same as a verified detection: the if_sid values and field
-names are still placeholders you need to check against your own decoders with `wazuh-logtest`
-before you trust what they match. Only one of the three base rules it builds on (554, "file added
-to the system") is a documented Wazuh default; the other two have no if_sid at all and are plain
-placeholders, read the comments in the file before loading it.
+bugs in PHP core, fixed in 8.5.12, 8.4.27, 8.3.36 and 8.2.35). It has no exploit code: a new PHP
+file written by the web server's own account, a specific outbound tool (nc/ncat) launched from
+inside the web docroot via Linux audit, and a burst of kernel-logged php-fpm crashes or OOM
+kills, to adapt to your own decoders and prove out with `ruleguard run` before you trust them on
+a manager. It has been loaded on a live Wazuh 4.14.7 manager with `wazuh-analysisd -t` (exits 0),
+and as of 0.3.4 the rules themselves were corrected against findings from live `wazuh-logtest`
+testing with synthetic samples: a field the shell-spawn rule relied on does not exist in auditd's
+own decoder, the crash rules now chain from the stock kernel rules (1010, 5108) that actually
+reach a manager instead of an unverified syslog placeholder, and the new-file rule's level came
+down from 12 to 5 so it does not flood a site that deploys often. `examples/php2shell_suite.json`
+is a RuleGuard suite for these cases; its raw event text is a placeholder you replace with lines
+from your own decoders. If_sid values and field names that remain placeholders are still marked
+as such in the file's comments, read them before loading it.
 
-**If you loaded the 0.3.2 example:** update to 0.3.3 before you load it again. The 0.3.2 file does
-not parse on a live Wazuh 4.x manager (five `<field>` conditions use alternation without
-`type="pcre2"`, which `wazuh-analysisd` rejects, and the whole rules file fails to load) so a
-restart with it in place would have left the manager not starting.
+**If you loaded the 0.3.2 or 0.3.3 example:** update to 0.3.4 before you load it again. 0.3.2 does
+not parse on a live Wazuh 4.x manager at all (five `<field>` conditions use alternation without
+`type="pcre2"`, which `wazuh-analysisd` rejects, and the whole rules file fails to load, so a
+restart with it in place would have left the manager not starting). 0.3.3 parses and loads, but
+its shell-spawn and crash rules were written against fields and decoders that do not match what a
+real auditd or kernel log actually produces, so they would not have fired as intended.
 
 Use a account with only the required permissions authorized for logtest and session cleanup. The existing JWT is
 used only on the specified HTTPS origin; environment proxies are ignored. No insecure TLS
@@ -318,7 +323,7 @@ Run the same suite before and after with `--label` set to the Wazuh version, the
 Run `ruleguard coverage suite.json`. It lists the techniques your cases assert through `mitre_contains`, the cases that assert none, and with `--want T1110,T1558.003` the techniques you expected but never tested (exit code 1). It only reads the suite and does not prove that a rule works.
 
 ### Does RuleGuard detect the PHP2Shell vulnerability (CVE-2026-109618, CVE-2026-109619)?
-RuleGuard does not scan for the vulnerable PHP version itself, that is a plain `php -v`. What ships here is `examples/php2shell_indicators.xml`, a teaching example of three post-compromise behaviors to watch for after that kind of RCE: a PHP file written to a web root by the web server's own account, a shell spawned by a web server process, and a burst of php-fpm crashes or OOM kills. It has no exploit code. As of 0.3.3 the file has been proven to parse and load on a live Wazuh 4.14.7 manager; the if_sid values and field names inside it are still placeholders you adapt to your own decoders and prove out with `ruleguard run` before you trust them.
+RuleGuard does not scan for the vulnerable PHP version itself, that is a plain `php -v`. What ships here is `examples/php2shell_indicators.xml`, a teaching example of post-compromise behaviors to watch for after that kind of RCE: a PHP file written to a web root by the web server's own account, a specific outbound tool (nc/ncat) launched from inside the web docroot, and a burst of kernel-logged php-fpm crashes or OOM kills. It has no exploit code. It parses and loads on a live Wazuh 4.14.7 manager, and as of 0.3.4 the rules were corrected against findings from live `wazuh-logtest` testing with synthetic samples, replacing fields that a real decoder never produces. The if_sid values and the docroot path are still placeholders you adapt to your own decoders and prove out with `ruleguard run` before you trust them.
 
 ### Can a Wazuh rule file that passes XML validation still stop the manager from starting?
 Yes. A `<field>` or `<regex>` that uses alternation such as `(php|phtml)` without `type="pcre2"` parses as valid XML but fails to compile in Wazuh's default OS_Regex engine, and `wazuh-analysisd` rejects the whole file (error 5107, then 1220) rather than just the one rule. `ruleguard lint` has an error for exactly this construct (`group-alternation-without-pcre2`), found after loading an earlier version of the PHP2Shell example on a real manager.

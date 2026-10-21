@@ -1,5 +1,5 @@
 <!-- Synthetic teaching example. Review and load on a disposable Wazuh 4.x manager.
-     Check IDs are unused. These rules have not been validated against a live engine.
+     Check IDs are unused.
 
      Written after PHP's 21 October 2026 emergency release for CVE-2026-109618 and
      CVE-2026-109619 (nicknamed "PHP2Shell"), two unauthenticated RCE bugs in PHP
@@ -8,68 +8,98 @@
      post-compromise indicator patterns to adapt to your own decoders and log
      sources, then prove out with `ruleguard run` before trusting them.
 
-     Confidence of each base rule, checked against the Wazuh 4.x rules syntax
-     reference and FIM docs on 2026-10-22:
-       - 554 ("File added to the system") is a documented default FIM rule and is
-         used as written below.
+     Verification history:
+       - 0.3.2: not checked against a live engine.
+       - 0.3.3: proven to parse and load on a live Wazuh 4.14.7 manager
+         (`wazuh-analysisd -t` exits 0). That only means the file loads, not that
+         any rule fires correctly.
+       - 0.3.4: the rules below were adapted against findings from testing on a
+         live Wazuh 4.14.7 manager with `wazuh-logtest` and synthetic sample
+         events (no PoC, no real exploit chain, no real FIM event, no production
+         log data): 6 cases that should alert fired at the expected level, 11
+         normal-looking events did not alert, and 1 regression check on an older
+         rule still hit. That testing was not run by whoever last edited this
+         comment; it is reported here because it changed what the rules say.
+         Re-run it yourself with `wazuh-logtest` against your own decoders
+         before you trust any of this on a real host.
+
+     Confidence of each base rule:
+       - 554 ("File added to the system") and 1010 / 5108 (kernel segfault / OOM
+         lines) are documented Wazuh default rules.
        - There is no single documented default rule for "a shell was spawned by
-         this parent process" across every Wazuh install: that depends entirely
-         on which exec-monitoring log source you run (auditd execve rules,
-         Sysmon for Linux, an EDR agent's own decoder). Rule 100211 below has no
-         <if_sid>: it is a standalone rule matching directly on field names
-         (parent_process, process) that are placeholders, not a verified
-         decoder's real output. Give it a real <if_sid> or <if_group> scoped to
-         your own exec-monitoring decoder before you load it, or it can fire on
-         anything that happens to carry fields with these names.
-       - There is likewise no single documented default rule for "this host just
-         logged a php-fpm crash line" independent of your syslog decoder. Rule
-         100212 below is the same kind of standalone placeholder: no <if_sid>,
-         generic field names (program_name, message) that must be checked
-         against what your actual syslog decoder produces before you rely on it. -->
+         this parent process" across every Wazuh install. auditd's execve
+         decoder does not produce a "parent_process" field at all, only a
+         numeric ppid, so a rule written against "parent_process" can never
+         fire; rule 100211 below uses audit.exe and audit.cwd instead, which
+         auditd really decodes, as a parent proxy (a specific tool launched
+         from inside the web docroot), not a verified parent-process check.
+       - Stock rule 80792 ("Audit: Command") only fires when audit.key is
+         listed in etc/lists/audit-keys with the value "command"; a rule
+         written as a child of 80792 for a custom key can silently never fire.
+         Rule 100211 below chains from <if_group>audit</if_group> instead, to
+         avoid that trap. If you would rather chain from 80792, add your audit
+         key to that list first and prove it fires with wazuh-logtest. -->
 <group name="php2shell_indicators,">
-  <!-- 1. A new PHP (or other executable) file appears inside a web root, written by
-       the web server's own account. A legitimate deploy writes these as the deploy
-       user, not as www-data/php-fpm/apache at request time, so this is a plausible
-       webshell-drop signal. if_sid 554 is Wazuh's documented default FIM rule for
-       a newly added file (enable alert_new_files in your syscheck config). -->
-  <rule id="100210" level="12">
+  <!-- 1. A new PHP (or other executable) file appears inside a web root. A legitimate
+       deploy writes these as the deploy user, not as www-data/php-fpm/apache at request
+       time, so this is a plausible webshell-drop signal. if_sid 554 is Wazuh's
+       documented default FIM rule for a newly added file (enable alert_new_files in
+       your syscheck config). Level kept low (5): a site that deploys often adds PHP
+       files as routine, legitimate traffic, so this is a lead to review, not an
+       incident on its own. On a per-user PHP-FPM setup, files are owned by the site's
+       own account, not www-data/apache/nginx: drop the uname_after filter there, or
+       this rule will simply never match. -->
+  <rule id="100210" level="5">
     <if_sid>554</if_sid>
     <field name="file" type="pcre2">\.(php|phtml|php5)$</field>
     <field name="uname_after" type="pcre2">^(www-data|php-fpm|apache|nginx)$</field>
-    <description>Demo: new PHP file written to disk by the web server's own account.</description>
+    <description>Demo: new PHP file written to disk by the web server's own account. Drop the
+      uname_after field on a per-user PHP-FPM setup where this account is never the owner.</description>
     <mitre><id>T1505.003</id></mitre>
   </rule>
 
-  <!-- 2. A shell spawned with a web-server process as its parent. A worker handling
-       plain PHP requests normally never forks sh/bash; after PHP2Shell-class RCE,
-       the dropped shell runs as whatever user php-fpm/apache/nginx runs as.
-       NOT VERIFIED against a default decoder: if_sid and the field names are
-       placeholders for whatever exec-monitoring source you actually run. -->
+  <!-- 2. A specific outbound tool launched from inside the web docroot, via Linux audit
+       (auditd). "Any shell from the web root" is very noisy: PHP's own exec() and most
+       frameworks already run commands through /bin/sh as routine behavior, not just
+       after a compromise. This matches narrower, higher-signal tools instead (nc,
+       ncat), which a plain PHP app has little legitimate reason to launch.
+       audit.cwd is a placeholder for YOUR web docroot path; replace it before loading.
+       Needs the full audit record group (not a single line) for audit.cwd to decode;
+       a partial sample will not show this field in wazuh-logtest. -->
   <rule id="100211" level="13">
-    <field name="parent_process" type="pcre2">^(php-fpm|apache2|httpd|nginx)$</field>
-    <field name="process" type="pcre2">^(sh|bash|dash|nc|curl|wget)$</field>
-    <description>Demo: shell or outbound tool spawned by the web server process. Adapt if_sid and
-      the field names to your actual exec-monitoring decoder (auditd, Sysmon for Linux, or an
-      EDR agent); this has not been checked against any one of them.</description>
+    <if_group>audit</if_group>
+    <field name="audit.exe" type="pcre2">/(nc|ncat)$</field>
+    <field name="audit.cwd" type="pcre2">^/var/www/REPLACE_WITH_YOUR_DOCROOT</field>
+    <description>Demo: nc or ncat launched from inside a web docroot. Replace audit.cwd with your
+      own docroot path; this has not been checked against any decoder but auditd's.</description>
     <mitre><id>T1059.004</id></mitre>
   </rule>
 
   <!-- 3. A burst of php-fpm worker crashes or out-of-memory kills in a short window.
        Both CVEs are memory-corruption bugs (OOM cleanup and use-after-free), so
-       repeated crashes right before a webshell appears is a plausible precursor,
-       not proof on its own, pair it with rules 100210/100211 above.
-       100212 is the single-event base rule; 100213 is the frequency rule that
-       counts repeats of 100212 specifically (never of its own id, that cannot
-       fire and some managers reject it as circular). NOT VERIFIED: if_sid and
-       field names are placeholders for your actual syslog decoder. -->
+       repeated crashes right before a webshell appears is a plausible precursor, not
+       proof on its own, pair it with rules 100210/100211 above.
+       php-fpm's own log line is often not collected at all; what usually reaches the
+       manager is the KERNEL's line about the crash, which stock Wazuh already decodes
+       as rule 1010 (segfault) or 5108 (OOM kill). 100212 and 100214 are single-event
+       rules chained from those stock rules and narrowed to php-fpm; 100213 is the
+       frequency rule that counts repeats of EITHER one via their shared "php2shell_crash"
+       group (never its own group: this outer file group is "php2shell_indicators", a
+       different name, so it cannot count itself). -->
   <rule id="100212" level="5">
-    <field name="program_name">^php-fpm$</field>
-    <field name="message" type="pcre2">(segfault|SIGSEGV|out of memory|oom-killer)</field>
-    <description>Demo: a single php-fpm crash or OOM kill line. Adapt if_sid and the field names
-      to your actual syslog decoder; this has not been checked against any one of them.</description>
+    <if_sid>1010</if_sid>
+    <field name="message" type="pcre2">php-fpm</field>
+    <group>php2shell_crash,</group>
+    <description>Demo: a kernel segfault line naming php-fpm.</description>
+  </rule>
+  <rule id="100214" level="5">
+    <if_sid>5108</if_sid>
+    <field name="message" type="pcre2">php-fpm</field>
+    <group>php2shell_crash,</group>
+    <description>Demo: a kernel OOM-kill line naming php-fpm.</description>
   </rule>
   <rule id="100213" level="8" frequency="5" timeframe="120">
-    <if_matched_sid>100212</if_matched_sid>
-    <description>Demo: 5 or more php-fpm crashes or OOM kills (rule 100212) within 2 minutes.</description>
+    <if_matched_group>php2shell_crash</if_matched_group>
+    <description>Demo: 5 or more php-fpm crashes or OOM kills (rules 100212/100214) within 2 minutes.</description>
   </rule>
 </group>
