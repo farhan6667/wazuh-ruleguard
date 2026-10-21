@@ -185,6 +185,8 @@ rules, restart services, change production settings, or authenticate with userna
 For the teaching example, `examples/local_rules.xml` contains custom rule IDs that must be
 checked for collisions before use. Its expected output still needs live verification.
 
+<img src="docs/img/php2shell-announce.webp" alt="Wazuh RuleGuard v0.3.2: a PHP2Shell detection teaching example for CVE-2026-109618 and CVE-2026-109619, no exploit code, lint-checked" width="100%">
+
 `examples/php2shell_indicators.xml` is the same kind of teaching example, written after PHP's
 21 October 2026 emergency patch for CVE-2026-109618 and CVE-2026-109619 (two unauthenticated RCE
 bugs in PHP core, fixed in 8.5.12, 8.4.27, 8.3.36 and 8.2.35). It has no exploit code: three
