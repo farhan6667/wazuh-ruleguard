@@ -11,8 +11,8 @@ authors:
 repository-code: "https://github.com/farhan6667/wazuh-ruleguard"
 url: "https://nexaforge.eu.cc/"
 license: Apache-2.0
-version: "0.3.0"
-date-released: "2026-10-09"
+version: "0.3.1"
+date-released: "2026-10-22"
 keywords:
   - wazuh
   - siem

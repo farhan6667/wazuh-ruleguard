@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1: 2026-10-22
 
 - Removed the Urdu README that shipped in 0.3.0. The project documentation stays in plain English for an international audience.
 - New `examples/php2shell_indicators.xml`: a teaching example for CVE-2026-109618 and CVE-2026-109619
