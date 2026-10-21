@@ -30,6 +30,15 @@ class PatternChecks(unittest.TestCase):
     def test_php2shell_example_has_no_findings(self):
         self.assertEqual(lint.lint_paths([str(EXAMPLES / "php2shell_indicators.xml")]), [])
 
+    def test_self_referencing_if_sid_is_flagged(self):
+        self.assertIn("self-referencing-sid", codes(rules(rule("<if_sid>100300</if_sid>"))))
+
+    def test_self_referencing_if_matched_sid_is_flagged(self):
+        self.assertIn("self-referencing-sid", codes(rules(rule("<if_matched_sid>100300</if_matched_sid>"))))
+
+    def test_if_sid_pointing_at_another_rule_is_not_flagged(self):
+        self.assertNotIn("self-referencing-sid", codes(rules(rule("<if_sid>60000</if_sid>"))))
+
     def test_character_class_needs_pcre2(self):
         self.assertIn("pcre-syntax-without-type", codes(rules(rule("<regex>for [a-z]+ from</regex>"))))
         self.assertNotIn("pcre-syntax-without-type", codes(rules(rule("<regex type='pcre2'>for [a-z]+ from</regex>"))))

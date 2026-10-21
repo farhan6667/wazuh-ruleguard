@@ -106,9 +106,15 @@ def lint_text(text, path="<text>"):
             if child.tag == "field" and (child.get("name") or "").startswith(("agent.", "agent_")):
                 findings.append(_finding("info", "pinned-identifier", path, rule_id,
                                          "A field condition on an agent identifier can rot after rebuilds. Check it still matches."))
-            if child.tag == "if_sid":
-                for parent in re.split(r"[\s,]+", (child.text or "").strip()):
-                    if parent:
+            if child.tag in ("if_sid", "if_matched_sid"):
+                refs = [p for p in re.split(r"[\s,]+", (child.text or "").strip()) if p]
+                if rule_id in refs:
+                    findings.append(_finding("error", "self-referencing-sid", path, rule_id,
+                                             f"<{child.tag}> references the rule's own id ({rule_id}). Wazuh matches a rule against an "
+                                             "earlier rule's prior alerts, never its own: this can never fire, and a manager may reject "
+                                             "it as circular. Point it at the id of the rule that decodes the underlying single event."))
+                if child.tag == "if_sid":
+                    for parent in refs:
                         parents.setdefault(parent, []).append(rule_id)
         if rule.find("description") is None and rule.get("noalert") != "1":
             findings.append(_finding("warning", "no-description", path, rule_id, "The rule has no <description>, so its alerts will be hard to read."))

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.2: 2026-10-22
+
+- Fixed `examples/php2shell_indicators.xml`: its php-fpm crash frequency rule referenced its own
+  rule id in `if_matched_sid`, which can never fire and some managers reject as circular. Split
+  it into a base rule (100212) and a separate frequency rule (100213) that counts repeats of
+  100212, the pattern Wazuh's own docs use.
+- The same file's "new file" rule used `if_sid 550` ("integrity checksum changed", for a modified
+  file). Changed to `554` ("file added to the system"), which is the documented default FIM rule
+  for a new file. The shell-spawned-by-web-server and php-fpm-crash rules had no verified default
+  `if_sid` to point at (that depends on which exec-monitoring and syslog decoders you run), so
+  they're now standalone placeholder rules with no `if_sid`, and the file's header comment says
+  plainly which of the three base rules is confirmed against Wazuh's docs and which are not.
+- New `ruleguard lint` check, `self-referencing-sid`: flags a rule whose `if_sid` or
+  `if_matched_sid` points at its own id, the mistake above. Caught nothing it shouldn't on the
+  rest of the repo's examples.
+- Thanks to a second review pass that caught this before anyone loaded the example on a manager.
+
 ## 0.3.1: 2026-10-22
 
 - Removed the Urdu README that shipped in 0.3.0. The project documentation stays in plain English for an international audience.
