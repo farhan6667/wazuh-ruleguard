@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.4: 2026-10-22
+
+- **Corrected three rules in `examples/php2shell_indicators.xml` that would not have fired as
+  written**, found through live `wazuh-logtest` testing on a Wazuh 4.14.7 manager with synthetic
+  samples (no exploit chain, no real production data): 6 cases that should alert fired at the
+  expected level, 11 normal-looking events did not alert, and 1 regression check on an older rule
+  still hit. The new-PHP-file rule has not yet fired from a real FIM event, and none of this was
+  tested against a real exploit.
+  - The shell-spawn rule matched on a field (`parent_process`) that Linux audit's own execve
+    decoder never produces, only a numeric ppid, so it could never fire. Replaced with
+    `audit.exe` and `audit.cwd` (a web-docroot path you must set), narrowed to specific
+    high-signal tools (`nc`, `ncat`) instead of any shell: PHP's own `exec()` routinely runs
+    commands through `/bin/sh` as normal behavior, so "any shell" was too noisy to use as written.
+  - The crash/OOM rules assumed a php-fpm log line that is often never collected at all. What
+    usually reaches the manager is the kernel's own line, which stock Wazuh already decodes as
+    rule 1010 (segfault) or 5108 (OOM kill). The rules now chain from those stock rules and match
+    `php-fpm` in the message, instead of an unverified syslog placeholder.
+  - The new-PHP-file rule's level dropped from 12 to 5: a site that deploys PHP often will trip
+    it as routine traffic, not an incident, so it is a lead to review rather than a high-severity
+    alert. Documented that the owner filter (`uname_after`) should be dropped on a per-user
+    PHP-FPM setup, where files are owned by the site's own account and the filter would simply
+    never match.
+  - Documented that a child of stock rule 80792 ("Audit: Command") only fires when the audit key
+    is registered in `etc/lists/audit-keys` with the value `command`; the shell-spawn rule now
+    chains from `<if_group>audit</if_group>` instead, to avoid that trap entirely.
+- New `examples/php2shell_suite.json`: a RuleGuard suite with 8 cases covering the rules above,
+  both the alerts that should fire and the normal-looking events that should not. The raw event
+  text is a placeholder you must replace with lines captured from your own decoders, same as the
+  if_sid values and field names elsewhere in this example; it validates with `ruleguard validate`
+  but has not itself been run against a live manager.
+
 ## 0.3.3: 2026-10-22
 
 - **Fixed `examples/php2shell_indicators.xml` so it actually loads.** Five `<field>` conditions
