@@ -4,10 +4,14 @@ Everything here is advisory and offline. It reads rule XML, never contacts a man
 prove that a rule works. Use it next to a real logtest run, not instead of one.
 """
 import re
-import xml.etree.ElementTree as ET
+# Rule files come from the person running the linter, and _parse() refuses any DOCTYPE or ENTITY
+# declaration before expat sees the text, so entity expansion and external entities cannot happen.
+# That is why the stdlib parser is fine here without adding defusedxml as a runtime dependency.
+import xml.etree.ElementTree as ET  # nosec B405
 from pathlib import Path
 
 from .core import GuardError
+from .report import md_cell
 
 MAX_FILES = 500
 MAX_BYTES = 4_000_000
@@ -27,19 +31,34 @@ PATTERN_ELEMENTS = {"match", "regex", "field", "data", "extra_data", "user", "sy
                     "protocol", "hostname", "id", "url", "location", "action", "status"}
 PINNED_ELEMENTS = {"srcip", "dstip", "hostname", "system_name"}
 
-# Constructs that only the PCRE2 engine understands, per the Wazuh regex reference.
+UNESCAPED_BRACKET = re.compile(r"(?<!\\)\[")
+
+
+def _has_character_class(text):
+    """An unescaped [ with a ] somewhere after it. Done without a regex like \\[[^\\]]*\\], which
+    backtracks quadratically on a long run of [ with no closing bracket."""
+    found = UNESCAPED_BRACKET.search(text)
+    return bool(found) and "]" in text[found.end():]
+
+
+# Constructs that only the PCRE2 engine understands, per the Wazuh regex reference. Every check here
+# must stay linear on hostile input: one element of a rule file can be megabytes long.
 PCRE_ONLY = [
-    (re.compile(r"\(\?"), "a group modifier or lookaround such as (?i) or (?:"),
-    (re.compile(r"(?<!\\)\[[^\]]*\]"), "a character class like [a-z]"),
-    (re.compile(r"\{\d+(,\d*)?\}"), "a counted quantifier like {3} or {2,5}"),
-    (re.compile(r"\\[bBAzZhHnrfxX]|\\\d"), "an escape the default engine does not know (such as \\b or \\n)"),
-    (re.compile(r"[*+?]\?|[*+?]\+"), "a lazy or possessive quantifier"),
+    (re.compile(r"\(\?").search, "a group modifier or lookaround such as (?i) or (?:"),
+    (_has_character_class, "a character class like [a-z]"),
+    (re.compile(r"\{[0-9]+(,[0-9]*)?\}").search, "a counted quantifier like {3} or {2,5}"),
+    (re.compile(r"\\[bBAzZhHnrfxX0-9]").search, "an escape the default engine does not know (such as \\b or \\n)"),
+    (re.compile(r"[*+?]\?|[*+?]\+").search, "a lazy or possessive quantifier"),
 ]
 BACKSLASH_EXPR = re.compile(r"\\.")
 # Alternation inside a group, such as \.(php|phtml)$. Seen on a live Wazuh 4.14.7 manager to make
 # wazuh-analysisd reject the whole rule file (error 5107, then 1220 "Error loading the rules"), which
 # stops the manager from starting. Worse than a rule that silently never matches, so it is an error.
-GROUP_ALTERNATION = re.compile(r"\([^()]*\|[^()]*\)")
+# The first part excludes | so the engine cannot try every | as the split point. The older form took
+# 30 seconds on a 100 KB element and grew with the square of the length. It matches the same text.
+GROUP_ALTERNATION = re.compile(r"\([^()|]*\|[^()]*\)")
+NUMBER = re.compile(r"[0-9]+")
+DECLARATION = re.compile(r"<!\s*(DOCTYPE|ENTITY)", re.IGNORECASE)
 OS_REGEX_ELEMENTS = {"field", "regex"}
 
 
@@ -69,8 +88,8 @@ def _pattern_findings(path, rule_id, element):
                             "engine cannot compile it: wazuh-analysisd rejects the whole rule file and the manager will not "
                             "start. Add type=\"pcre2\"."))
         return out
-    for rx, what in PCRE_ONLY:
-        if rx.search(text):
+    for found, what in PCRE_ONLY:
+        if found(text):
             out.append(_finding("warning", "pcre-syntax-without-type", path, rule_id,
                                 f"<{element.tag}> uses {what} but has no type=\"pcre2\". The default engine does not support it, "
                                 "so the rule can parse cleanly and still never match."))
@@ -86,23 +105,46 @@ def _pattern_findings(path, rule_id, element):
     return out
 
 
-def lint_text(text, path="<text>"):
+def _is_number(value):
+    """ASCII digits only. str.isdigit() also accepts characters such as a superscript two, which int()
+    then rejects with a traceback, and Arabic-Indic digits, which Wazuh does not accept as a rule id."""
+    return bool(value) and NUMBER.fullmatch(value) is not None
+
+
+def _parse(text, path):
+    name = Path(str(path)).name
+    if DECLARATION.search(text):
+        raise GuardError(f"Cannot parse {name}: it contains a DOCTYPE or ENTITY declaration, which Wazuh rule "
+                         "files do not use. Refusing it rather than letting the parser expand entities.")
     try:
-        root = ET.fromstring("<root>" + re.sub(r"^\s*<\?xml[^>]*\?>", "", text) + "</root>")
+        # Rule files have several top-level <group> elements, so wrap them in one root to parse them.
+        return ET.fromstring("<root>" + re.sub(r"^\s*<\?xml[^>]*\?>", "", text) + "</root>")  # nosec B314
     except ET.ParseError as exc:
-        raise GuardError(f"Cannot parse {Path(str(path)).name}: {exc}") from None
+        raise GuardError(f"Cannot parse {name}: {exc}") from None
+
+
+def _rule_ids(root):
+    """Numeric rule ids from the parsed tree, so a rule id inside an XML comment is not counted."""
+    return [r.get("id") for r in root.iter("rule") if _is_number(r.get("id"))]
+
+
+def lint_text(text, path="<text>"):
+    return _lint_root(_parse(text, path), path)
+
+
+def _lint_root(root, path):
     findings, seen, parents = [], {}, {}
     parent_of = {child: parent for parent in root.iter() for child in parent}
     for rule in root.iter("rule"):
         rule_id = rule.get("id")
-        if not rule_id or not rule_id.isdigit():
+        if not _is_number(rule_id):
             findings.append(_finding("error", "bad-id", path, rule_id, "A rule needs a numeric id."))
             continue
         if rule_id in seen:
             findings.append(_finding("error", "duplicate-id", path, rule_id, "Rule id is defined more than once in the files checked."))
         seen[rule_id] = True
         level = rule.get("level")
-        if level is None or not level.isdigit() or not 0 <= int(level) <= 16:
+        if not _is_number(level) or not 0 <= int(level) <= 16:
             findings.append(_finding("error", "bad-level", path, rule_id, "level must be a whole number from 0 to 16."))
         for child in rule:
             if child.tag not in VALID_RULE_ELEMENTS:
@@ -166,7 +208,18 @@ def collect(paths):
     for raw in paths:
         p = Path(raw)
         if p.is_dir():
-            files += sorted(x for x in p.rglob("*.xml") if x.is_file())
+            base = p.resolve()
+            for x in sorted(p.rglob("*.xml")):
+                if not x.is_file():
+                    continue
+                # A link inside a rules folder that points outside it (planted in a pull request, say)
+                # would otherwise be read and reported on. Such a file has to be named explicitly.
+                target = x.resolve()
+                if base not in target.parents:
+                    raise GuardError(f"{x.name} links to a file outside {p.name}; pass it explicitly if you meant to lint it")
+                files.append(x)
+                if len(files) > MAX_FILES:
+                    raise GuardError(f"Too many files (limit {MAX_FILES})")
         elif p.is_file():
             files.append(p)
         else:
@@ -181,14 +234,22 @@ def collect(paths):
 def lint_paths(paths):
     findings, ids = [], {}
     for f in collect(paths):
-        if f.stat().st_size > MAX_BYTES:
+        try:
+            with f.open("rb") as stream:
+                raw = stream.read(MAX_BYTES + 1)  # bounded even if the file grows after it was listed
+        except OSError:
+            raise GuardError(f"Cannot read {f.name}") from None
+        if len(raw) > MAX_BYTES:
             raise GuardError(f"{f.name} is larger than {MAX_BYTES // 1_000_000} MB")
         try:
-            text = f.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
             raise GuardError(f"Cannot read {f.name} as UTF-8") from None
-        found = lint_text(text, f)
-        for rid in re.findall(r"""<rule\s+[^>]*\bid=["'](\d+)["']""", text):
+        root = _parse(text, f)
+        found = _lint_root(root, f)
+        # The old raw-text regex here also counted ids inside XML comments and backtracked
+        # quadratically on a long run of "<rule " with no ">".
+        for rid in _rule_ids(root):
             if rid in ids and ids[rid] != str(f):
                 found.append(_finding("error", "duplicate-id", f, rid, f"Rule id is also defined in {Path(ids[rid]).name}."))
             ids.setdefault(rid, str(f))
@@ -213,8 +274,7 @@ def markdown(findings):
     if findings:
         lines += ["| Severity | Check | File | Rule | What to look at |", "|---|---|---|---|---|"]
         for f in findings:
-            msg = f["message"].replace("|", "\\|")
-            lines.append(f"| {f['severity']} | `{f['code']}` | {Path(f['file']).name} | {f['rule']} | {msg} |")
+            lines.append(f"| {f['severity']} | `{f['code']}` | {md_cell(Path(f['file']).name)} | {md_cell(f['rule'])} | {md_cell(f['message'])} |")
     else:
         lines.append("Nothing to report.")
     return "\n".join(lines) + "\n"

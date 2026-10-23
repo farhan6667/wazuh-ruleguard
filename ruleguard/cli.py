@@ -2,22 +2,29 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import sys
-import xml.etree.ElementTree as ET
+# Only used to write JUnit XML from values RuleGuard escapes itself; nothing untrusted is parsed here.
+import xml.etree.ElementTree as ET  # nosec B405
 from importlib import resources
 
 from . import coverage as cover
 from . import lint as linting
 from . import report as views
 from .backends import APIBackend, ReplayBackend
-from .core import GuardError, compare, load_suite, run_suite
+from .core import GuardError, compare, load_suite, read_json_file, run_suite
+
+# Characters XML 1.0 cannot carry at all. ElementTree writes them through unescaped, and a JUnit
+# reader then rejects the whole file, so they are replaced before writing.
+XML_INVALID = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff￾￿]")
 
 
 def read_json(path):
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        raise GuardError("Cannot read JSON input") from None
+    return read_json_file(path, "JSON input")
+
+
+def _xml_safe(value):
+    return XML_INVALID.sub("�", str(value))
 
 
 def write_json(path, value):
@@ -29,9 +36,9 @@ def junit(report, path):
                       failures=str(sum(r["status"] == "fail" for r in report["results"])),
                       errors=str(sum(r["status"] == "error" for r in report["results"])))
     for row in report["results"]:
-        case = ET.SubElement(root, "testcase", classname=row["case_id"], name=f"step-{row['step']}")
+        case = ET.SubElement(root, "testcase", classname=_xml_safe(row["case_id"]), name=f"step-{row['step']}")
         if row["status"] != "pass":
-            ET.SubElement(case, "error" if row["status"] == "error" else "failure").text = "; ".join(row["failures"])
+            ET.SubElement(case, "error" if row["status"] == "error" else "failure").text = _xml_safe("; ".join(row["failures"]))
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
 
 
@@ -39,13 +46,15 @@ def write_text(path, text):
     Path(path).write_text(text, encoding="utf-8")
 
 
+# The two sample events are byte-for-byte the ones in examples/suite.json, so the quick start in the
+# README can replay examples/synthetic-before.json against a fresh starter suite and pass.
 STARTER = {
     "schema_version": 1,
     "cases": [
         {
             "id": "unexpected-login-failure",
             "events": [{
-                "event": "{\"event_type\":\"login_failure\",\"username\":\"demo_user\"}",
+                "event": "{\"event_type\": \"login_failure\", \"username\": \"demo_user\"}",
                 "location": "ruleguard", "log_format": "syslog",
                 "expect": {"rule_id": "100100", "level": 10, "mitre_contains": ["T1110"]},
             }],
@@ -53,7 +62,7 @@ STARTER = {
         {
             "id": "healthcheck-exception",
             "events": [{
-                "event": "{\"event_type\":\"login_failure\",\"username\":\"healthcheck\"}",
+                "event": "{\"event_type\": \"login_failure\", \"username\": \"svc_healthcheck\"}",
                 "location": "ruleguard", "log_format": "syslog",
                 "expect": {"rule_id": "100101", "alert": False},
             }],
@@ -62,7 +71,18 @@ STARTER = {
 }
 
 
+def _tolerant_output():
+    """A case id or file name with characters the console code page cannot show (a Windows CI runner
+    with redirected output uses cp1252) must not crash the run after the checks are done."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv=None):
+    _tolerant_output()
     parser = argparse.ArgumentParser(description="Test Wazuh 4.x detections; compare behavior across changes.")
     commands = parser.add_subparsers(dest="command", required=True)
     validate = commands.add_parser("validate", help="Check suite before contacting a manager")
@@ -182,6 +202,14 @@ def main(argv=None):
         return 2
     except KeyboardInterrupt:
         return 130
+    except Exception as exc:  # pylint: disable=broad-except
+        # A traceback would print local paths and pieces of the input. Say what kind of failure it was
+        # and how to get the detail, and keep exit code 2 so CI still stops.
+        if os.environ.get("RULEGUARD_DEBUG"):
+            raise
+        print(f"ruleguard: unexpected internal error ({type(exc).__name__}). This is a bug: set "
+              "RULEGUARD_DEBUG=1 to see the traceback, and report it with a synthetic reproduction.", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
