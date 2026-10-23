@@ -22,7 +22,7 @@
 - Sends your sample logs to a Wazuh 4.x manager's logtest API and checks the results against a JSON suite you write.
 - Tells you which detections changed after you edit a rule or upgrade the manager, before you find out the hard way.
 - Checks rule ID, alert flag, level, decoder, ATT&CK IDs, groups and forbidden rules, not just "did it alert."
-- Lints your rule XML offline for the mistakes that parse fine and then quietly never match, or stop the manager from starting.
+- Lints your rule XML offline for some common mistakes that parse fine and then quietly never match, or stop the manager from starting.
 - Writes JSON, JUnit XML, a readable HTML report and a Markdown summary you can drop into a CI step.
 - Has no runtime dependencies, works offline with a replay mode, and runs in a container if you would rather not install Python.
 
@@ -39,13 +39,15 @@ See the [full changelog](CHANGELOG.md) for every release.
 ## Quick start
 
 ```sh
+git clone https://github.com/farhan6667/wazuh-ruleguard.git
+cd wazuh-ruleguard
 python -m pip install .
 ruleguard init suite.json
 ruleguard validate suite.json
 ruleguard run suite.json --replay examples/synthetic-before.json --json result.json --html result.html
 ```
 
-That writes a starter suite, checks its structure, and runs it offline against stored sample output, no Wazuh manager required. Open `result.html` to see the report.
+That writes a starter suite, checks its structure, and runs it offline against the sample output stored in `examples/`, no Wazuh manager required. Both starter cases should pass. Open `result.html` to see the report.
 
 <details>
 <summary><b>Try the offline demo (no install, from the repo folder)</b></summary>
@@ -120,7 +122,7 @@ Each release publishes an image to GitHub Packages, so you can run RuleGuard wit
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/farhan6667/wazuh-ruleguard   run examples/suite.json --replay examples/synthetic-before.json --json result.json
 ```
 
-The image runs as a non-root user and contains only RuleGuard. Mount the folder with your suite, and pass the manager token as an environment variable (`-e WAZUH_API_TOKEN`) when you test against a real manager.
+The image runs as a non-root user and holds the slim Python base image plus RuleGuard, nothing else installed. Mount the folder with your suite, and pass the manager token as an environment variable (`-e WAZUH_API_TOKEN`) when you test against a real manager.
 
 </details>
 
@@ -134,14 +136,14 @@ ruleguard lint examples/rules-with-problems.xml
 ```
 
 ```text
-warning pcre-syntax-without-type  rule 100200: <regex> uses a character class like [a-z] but has no type="pcre2". The default engine does not support it, so the rule can parse cleanly and still never match.
-warning unknown-element           rule 100203: <made_up_condition> is not a documented element for a rule. An invalid tag can stop the manager from starting ...
-info    pinned-identifier         rule 100204: <srcip> is pinned to a specific value. If that machine is rebuilt or renamed the rule can stop matching without any error ...
-error   duplicate-id              rule 100200: Rule id is defined more than once in the files checked.
+warning pcre-syntax-without-type rules-with-problems.xml rule 100200: <regex> uses a character class like [a-z] but has no type="pcre2". ...
+warning unknown-element          rules-with-problems.xml rule 100203: <made_up_condition> is not a documented element for a rule. ...
+info    pinned-identifier        rules-with-problems.xml rule 100204: <srcip> is pinned to a specific value. ...
+error   duplicate-id             rules-with-problems.xml rule 100200: Rule id is defined more than once in the files checked.
 2 errors, 6 warnings, 2 notes
 ```
 
-Errors make the command exit with 1, and `--strict` does the same for warnings. Add `--json` or `--markdown` for CI. These are advisory checks: they cannot prove a rule works, so keep running a real suite next to them. The checks follow the [Wazuh regex and rules syntax reference](https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/regex.html), and [docs/wazuh-gotchas.md](docs/wazuh-gotchas.md) explains the failures behind them.
+Errors make the command exit with 1, and `--strict` does the same for warnings. When you point it at a folder, it refuses a file that is a link to somewhere outside that folder, and it refuses any file with a DOCTYPE or ENTITY declaration (Wazuh rule files never need one). Add `--json` or `--markdown` for CI. These are advisory checks: they cannot prove a rule works, so keep running a real suite next to them. The checks follow the [Wazuh regex and rules syntax reference](https://documentation.wazuh.com/current/user-manual/ruleset/ruleset-xml-syntax/regex.html), and [docs/wazuh-gotchas.md](docs/wazuh-gotchas.md) explains the failures behind them.
 
 </details>
 
@@ -191,6 +193,8 @@ Set `WAZUH_API_TOKEN` to an existing, temporary Wazuh API JWT using your normal 
 ```sh
 ruleguard run examples/suite.json --api https://test-manager.example:55000 --ca-file manager-ca.pem --json candidate.json --junit candidate.xml
 ```
+
+The HTTPS adapter follows Wazuh's documented logtest API, and its request handling is covered by unit tests with a fake manager. It has not yet been run end to end against a live manager by the maintainer, so a [compatibility report](https://github.com/farhan6667/wazuh-ruleguard/issues/new?template=compatibility_report.md) from a real 4.x manager is very welcome.
 
 Load your own rules and decoders on the disposable manager first. RuleGuard does not install rules, restart services, change production settings, or authenticate with username/password. For the teaching example, `examples/local_rules.xml` contains custom rule IDs that must be checked for collisions before use. Its expected output still needs live verification.
 
@@ -253,7 +257,7 @@ Exit codes: 0 checks pass/no differences, 1 assertions/differences/backend run e
 
 Logtest does not prove production log collection, indexing, alert delivery or live correlation will work. Sequences run as fast as the API responds; this is not a simulator with a virtual clock and does not exercise delays, events arriving out of order or production traffic volume. The corpus defines the coverage; passing a small corpus cannot establish detection quality across your fleet.
 
-Reports exclude raw event text and session/JWT tokens. Case names, rule metadata and fingerprints can still be sensitive: inspect artifacts before sharing them. Inputs are sent only to the manager you specify. Outputs cannot overwrite inputs. Cleanup is attempted even on run failure; a process crash or network outage may leave a session until Wazuh expires it.
+Reports exclude raw event text and session/JWT tokens. Case names, rule metadata and fingerprints can still be sensitive: inspect artifacts before sharing them. Inputs are sent only to the manager you specify. An output path cannot be the same as an input path. Suite and report files over 64 MiB and rule files over 4 MB are refused rather than read into memory. Cleanup is attempted even on run failure; a process crash or network outage may leave a session until Wazuh expires it.
 
 </details>
 
@@ -303,7 +307,7 @@ Run the same suite on your current test manager and save the result as `baseline
 Yes. It writes JUnit XML and uses exit codes (0 for clean, 1 for failed checks or differences, 2 for invalid input), so a pipeline can stop until someone reviews the change.
 
 ### How do I check my rule XML for mistakes before loading it?
-Run `ruleguard lint` on the rule files or the folder. It flags a regex the default engine cannot compile, a rule that counts its own alerts, a decoder name that does not exist, elements that are not documented for rules, duplicate IDs, bad levels and rules pinned to an address. Errors exit with 1. It is an offline, advisory check and does not prove a rule matches.
+Run `ruleguard lint` on the rule files or the folder. It flags regex syntax the default engine cannot compile or does not support, a rule that counts its own alerts, a decoder name that does not exist, elements that are not documented for rules, duplicate IDs, bad levels and rules pinned to an address. Errors exit with 1. It is an offline, advisory check and does not prove a rule matches.
 
 ### Does RuleGuard detect the PHP2Shell vulnerability (CVE-2026-109618, CVE-2026-109619)?
 RuleGuard does not scan for the vulnerable PHP version itself, that is a plain `php -v`. What ships here is a teaching example of post-compromise behaviors to watch for after that kind of RCE, with no exploit code. See the PHP2Shell section above for what it is proven to do and what is still a placeholder.

@@ -1,5 +1,7 @@
 [build-system]
-requires = ["setuptools>=68"]
+# Bounded on both sides. An open-ended floor lets any future release, including a hijacked one, into
+# every build; the ceiling means a new major version arrives through a reviewed Dependabot bump.
+requires = ["setuptools>=77,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,10 +9,23 @@ name = "wazuh-ruleguard"
 version = "0.3.4"
 description = "Declarative Wazuh 4.x detection regression tests and upgrade diffs"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "Syed Farhan Ahmed"}]
 dependencies = []
 readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 
 [project.urls]
 Homepage = "https://github.com/farhan6667/wazuh-ruleguard"
