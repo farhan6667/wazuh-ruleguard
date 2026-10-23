@@ -1,6 +1,7 @@
 """Manifest validation, expectations, and stable result comparison."""
 import hashlib
 import json
+from pathlib import Path
 
 
 class GuardError(Exception):
@@ -9,6 +10,32 @@ class GuardError(Exception):
 
 CHECKS = {"rule_id", "forbidden_rule_ids", "level", "alert", "decoder",
           "groups_contains", "mitre_contains"}
+
+# Suites and reports are small text files. The cap keeps a wrong path (a disk image, a device,
+# a multi-gigabyte log) from being read into memory before anything can complain about it.
+MAX_JSON_BYTES = 64 * 1024 * 1024
+
+OBSERVATION_KEYS = {"rule_id", "level", "alert", "decoder", "groups", "mitre", "warning_count"}
+
+
+def read_json_file(path, what="JSON input"):
+    """Read a JSON file defensively: regular files only, size capped, a clear error instead of a traceback."""
+    path = Path(path)
+    try:
+        if not path.is_file():
+            raise GuardError(f"Cannot read {what}: not a regular file")
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_JSON_BYTES + 1)
+    except OSError:
+        raise GuardError(f"Cannot read {what}") from None
+    if len(raw) > MAX_JSON_BYTES:
+        raise GuardError(f"Cannot read {what}: larger than {MAX_JSON_BYTES // (1024 * 1024)} MiB")
+    try:
+        return json.loads(raw.decode("utf-8-sig"))
+    except (ValueError, RecursionError):
+        # ValueError covers bad UTF-8 and bad JSON. RecursionError is deeply nested arrays or objects,
+        # which the stdlib decoder reports by blowing the stack rather than with a ValueError.
+        raise GuardError(f"Cannot read {what}: not valid UTF-8 JSON") from None
 
 
 def fingerprint(case):
@@ -19,10 +46,7 @@ def fingerprint(case):
 
 
 def load_suite(path):
-    try:
-        suite = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise GuardError("Cannot read suite JSON") from exc
+    suite = read_json_file(path, "suite JSON")
     if not isinstance(suite, dict) or suite.get("schema_version") != 1:
         raise GuardError("Suite must have schema_version 1")
     cases = suite.get("cases")
@@ -84,11 +108,16 @@ def normalize(response):
     messages = data.get("messages", [])
     if not isinstance(messages, list) or not all(isinstance(x, str) for x in messages):
         raise GuardError("Malformed logtest messages")
-    rule_id = rule.get("id")
+    rule_id, level, name = rule.get("id"), rule.get("level"), decoder.get("name")
+    if isinstance(level, str) and level.isascii() and level.isdigit():
+        level = int(level)  # tolerate a manager that serializes the level as text
+    if isinstance(rule_id, (dict, list, bool)) or (level is not None and type(level) is not int) \
+            or (name is not None and not isinstance(name, str)):
+        raise GuardError("Malformed rule id, level or decoder name")
     return {
         "rule_id": str(rule_id) if rule_id is not None else None,
-        "level": rule.get("level"), "alert": data["alert"],
-        "decoder": decoder.get("name"),
+        "level": level, "alert": data["alert"],
+        "decoder": name,
         "groups": sorted(set(groups)), "mitre": sorted(set(techniques)),
         "warning_count": sum("WARNING:" in m or "ERROR:" in m for m in messages),
     }
@@ -115,6 +144,7 @@ def run_suite(suite, backend, allow_warnings=False):
     rows = []
     for case in suite["cases"]:
         started = False
+        digest = fingerprint(case)  # once per case: hashing every event at every step is quadratic
         try:
             backend.start(case)
             started = True
@@ -122,12 +152,12 @@ def run_suite(suite, backend, allow_warnings=False):
                 actual = backend.process(event)
                 failures = check(event["expect"], actual, allow_warnings)
                 rows.append({"case_id": case["id"], "step": index + 1,
-                             "fingerprint": fingerprint(case),
+                             "fingerprint": digest,
                              "expected": event["expect"], "actual": actual,
                              "status": "fail" if failures else "pass", "failures": failures})
         except GuardError as exc:
             rows.append({"case_id": case["id"], "step": None,
-                         "fingerprint": fingerprint(case), "status": "error",
+                         "fingerprint": digest, "status": "error",
                          "failures": [str(exc)], "actual": None})
         finally:
             if started:
@@ -135,11 +165,36 @@ def run_suite(suite, backend, allow_warnings=False):
                     backend.close()
                 except GuardError as exc:
                     rows.append({"case_id": case["id"], "step": None,
-                                 "fingerprint": fingerprint(case), "status": "error",
+                                 "fingerprint": digest, "status": "error",
                                  "failures": [str(exc)], "actual": None})
     return {"schema_version": 1, "mode": backend.mode, "results": rows,
             "passed": sum(r["status"] == "pass" for r in rows),
             "failed": sum(r["status"] != "pass" for r in rows)}
+
+
+def check_observation(actual):
+    """Reject a recorded observation RuleGuard could not have written, before it is hashed, sorted or rendered."""
+    if not isinstance(actual, dict) or set(actual) != OBSERVATION_KEYS:
+        raise GuardError("Malformed recorded observation")
+    if type(actual["alert"]) is not bool or type(actual["warning_count"]) is not int or actual["warning_count"] < 0:
+        raise GuardError("Malformed recorded observation")
+    for key in ("rule_id", "decoder"):
+        if actual[key] is not None and not isinstance(actual[key], str):
+            raise GuardError("Malformed recorded observation")
+    if actual["level"] is not None and type(actual["level"]) is not int:
+        raise GuardError("Malformed recorded observation")
+    for key in ("groups", "mitre"):
+        if not isinstance(actual[key], list) or not all(isinstance(x, str) for x in actual[key]):
+            raise GuardError("Malformed recorded metadata")
+
+
+def check_report_row(row):
+    """A pass or fail row from a saved report: string case id, positive whole step, a well-formed observation."""
+    if not isinstance(row.get("case_id"), str) or type(row.get("step")) is not int or row["step"] < 1:
+        raise GuardError("Malformed report case id or step")
+    if row.get("status") not in {"pass", "fail"}:
+        raise GuardError("Malformed report row status")
+    check_observation(row.get("actual"))
 
 
 def compare(before, after):
@@ -151,9 +206,10 @@ def compare(before, after):
         for row in report["results"]:
             if not isinstance(row, dict) or "case_id" not in row or "step" not in row:
                 raise GuardError("Malformed report row")
-            key = (row["case_id"], row["step"])
             if row.get("status") == "error":
                 raise GuardError("Cannot compare incomplete runs; fix backend errors first")
+            check_report_row(row)
+            key = (row["case_id"], row["step"])
             if key in entries:
                 raise GuardError("Duplicate report row")
             entries[key] = row

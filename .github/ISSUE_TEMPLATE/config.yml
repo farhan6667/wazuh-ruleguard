@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/farhan6667/wazuh-ruleguard/discussions
     about: Not everything needs an issue. Start a discussion.
   - name: Report a security problem
-    url: https://github.com/farhan6667/wazuh-ruleguard/security/advisories/new
-    about: Please report vulnerabilities privately.
+    url: https://github.com/farhan6667/wazuh-ruleguard/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately, by email, as the security policy explains.

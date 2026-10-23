@@ -2,8 +2,10 @@
 import re
 
 from .core import GuardError
+from .report import md_cell
 
-TECHNIQUE = re.compile(r"^T\d{4}(\.\d{3})?$")
+# ASCII digits on purpose: \d would also accept Arabic-Indic and other Unicode digits.
+TECHNIQUE = re.compile(r"T[0-9]{4}(\.[0-9]{3})?")
 
 
 def parse_wanted(values):
@@ -13,8 +15,8 @@ def parse_wanted(values):
             item = item.strip().upper()
             if not item:
                 continue
-            if not TECHNIQUE.match(item):
-                raise GuardError(f"Not an ATT&CK technique ID: {item[:20]} (expected something like T1110 or T1558.003)")
+            if not TECHNIQUE.fullmatch(item):
+                raise GuardError(f"Not an ATT&CK technique ID: {item[:20]!r} (expected something like T1110 or T1558.003)")
             if item not in wanted:
                 wanted.append(item)
     return wanted
@@ -75,9 +77,9 @@ def markdown(report):
              f"**{len(report['techniques'])} techniques asserted across {report['cases']} cases**", ""]
     if report["techniques"]:
         lines += ["| Technique | Cases |", "|---|---|"]
-        lines += [f"| `{t['technique']}` | {', '.join('`%s`' % c for c in t['cases'])} |" for t in report["techniques"]]
+        lines += [f"| `{md_cell(t['technique'])}` | {', '.join('`%s`' % md_cell(c) for c in t['cases'])} |" for t in report["techniques"]]
     if report["wanted"]:
         lines += ["", "**Wanted but not tested:** " + (", ".join(f"`{t}`" for t in report["wanted_missing"]) or "none")]
     if report["cases_without_technique"]:
-        lines += ["", "Cases that assert no technique: " + ", ".join(f"`{c}`" for c in report["cases_without_technique"])]
+        lines += ["", "Cases that assert no technique: " + ", ".join(f"`{md_cell(c)}`" for c in report["cases_without_technique"])]
     return "\n".join(lines) + "\n"

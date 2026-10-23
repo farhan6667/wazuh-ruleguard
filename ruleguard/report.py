@@ -110,8 +110,17 @@ def compare_html(report):
     return _page("RuleGuard comparison", body)
 
 
-def _md(s):
-    return str(s).replace("|", "\\|").replace("\n", " ")
+def md_cell(s):
+    """Text from a suite or report, made safe for one Markdown table cell or code span.
+
+    Pipes would split the table, line breaks would end it, and a backtick would close the code span
+    and let the rest render as Markdown (links included) in a CI summary. Control characters go too.
+    """
+    text = "".join(ch if ch.isprintable() else " " for ch in str(s))
+    return text.replace("|", "\\|").replace("`", "'")
+
+
+_md = md_cell
 
 
 def run_markdown(report):

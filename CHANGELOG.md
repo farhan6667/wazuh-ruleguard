@@ -12,6 +12,53 @@
   art composited with real text in HTML, never text drawn by an image model.
 - Added the Wazuh trademark note to NOTICE, next to the existing NexaForge/SFA mark notice.
 
+### Hardening after an adversarial review (2026-10-24)
+
+- **`ruleguard lint` could be made to hang.** Three regular expressions backtracked with the
+  square of the input length: a long `(|||...` or `[[[...` inside one element, or many `<rule `
+  inside a comment. A 100 KB element took 30 seconds, and the 4 MB limit allowed hours, enough to
+  stall a CI job that lints rules from a pull request. All three checks are now linear; a test
+  compares them against the old patterns on 5,000 random strings to show they flag the same text.
+- **`lint` crashed on some Unicode digits.** A level such as `²` passed `str.isdigit()` and then
+  crashed `int()` with a traceback; Arabic-Indic digits were accepted as a valid rule id, and a
+  level over 4,300 digits long hit Python's integer conversion limit. Ids and levels must now be
+  ASCII digits and are reported as findings, not crashes.
+- **`lint` reported false cross-file duplicates** for rule ids inside XML comments, because it
+  searched the raw text. It now reads ids from the parsed rules.
+- **`lint` refuses DOCTYPE and ENTITY declarations** with a clear message, and when it scans a
+  folder it refuses a file that links to somewhere outside that folder.
+- **Hostile or broken JSON crashed with a traceback.** Deeply nested JSON raised RecursionError,
+  and a report whose case id or rule id was a list, or whose rows mixed types, crashed `compare`
+  with TypeError. Reports and replays are now checked row by row; suites and reports must be
+  regular files under 64 MiB; a UTF-8 byte order mark is accepted.
+- **`--timeout inf` crashed** with OverflowError and `nan` was accepted. The timeout must now be
+  above 0 and at most 3600 seconds. The API token must be visible ASCII, which also rules out
+  header injection through the environment variable, and an invalid port in `--api` is reported.
+- **Non-ASCII case ids or file names crashed output on a legacy Windows console** (cp1252, as on
+  a redirected CI log). Output now falls back to escapes instead of failing.
+- Any unexpected error now ends with a one-line message and exit code 2 instead of a traceback
+  that could print local paths; `RULEGUARD_DEBUG=1` shows the traceback.
+- Markdown summaries escape backticks and control characters as well as pipes, so a case id cannot
+  close a code span and inject links into a CI summary. JUnit XML stays well formed when a case id
+  contains control characters.
+- **Long cases were quadratic.** One case with 5,000 events took 27 seconds to record and 54 to
+  replay, because every step re-hashed the whole case. Both now take well under a second, and
+  replay no longer rescans every recorded row for every case (20,000 cases: 13 s to 0.2 s).
+- `ruleguard init` now writes the same two sample events as `examples/suite.json`, so the README
+  quick start (init, validate, replay `examples/synthetic-before.json`) passes. Before, both cases
+  errored with "Replay input differs from recorded events".
+- Supply chain: the build backend is bounded (`setuptools>=77,<85`) instead of open ended, and
+  `project.license` uses the SPDX string form (the table form stops building in February 2027).
+  The image workflow's actions are pinned to commit SHAs, its permissions are set per job, and
+  checkouts no longer keep the token. New `.github/dependabot.yml` for actions, pip and Docker.
+  The CI guide now installs a release tag instead of the moving `main` branch.
+- CI tests every Python version the README claims (3.10 to 3.14, Linux and Windows), lints the
+  examples, and runs pinned bandit and pip-audit.
+- README: softened "lints for the mistakes" to "some common mistakes", said plainly that the HTTPS
+  adapter has not yet been run against a live manager, corrected the container description and
+  the sample lint output. SECURITY.md lists what input is refused; the security contact link now
+  points at SECURITY.md, because private vulnerability reporting is not enabled on the repository.
+
 ## 0.3.4: 2026-10-22
 
 - **Corrected three rules in `examples/php2shell_indicators.xml` that would not have fired as

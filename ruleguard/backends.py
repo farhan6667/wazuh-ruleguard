@@ -1,11 +1,12 @@
 """HTTPS adapter and explicit offline replay, never a pretend Wazuh engine."""
 import json
+import math
 import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from .core import GuardError, fingerprint, normalize
+from .core import GuardError, check_report_row, fingerprint, normalize
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -20,10 +21,17 @@ class APIBackend:
         parsed = urllib.parse.urlsplit(url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
             raise GuardError("API URL must be an HTTPS origin, without credentials, path or query")
-        if not token or any(c.isspace() for c in token):
+        try:
+            parsed.port
+        except ValueError:
+            raise GuardError("API URL has an invalid port") from None
+        # A JWT is base64url and dots. Anything outside visible ASCII is a paste error at best and a
+        # header injection attempt at worst, so refuse it before it reaches an HTTP header.
+        if not token or not all(33 <= ord(c) <= 126 for c in token):
             raise GuardError("Set a valid JWT in WAZUH_API_TOKEN")
-        if timeout <= 0:
-            raise GuardError("Timeout must be positive")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) \
+                or not math.isfinite(timeout) or not 0 < timeout <= 3600:
+            raise GuardError("Timeout must be a number of seconds above 0 and at most 3600")
         self.url, self.jwt, self.timeout = url.rstrip("/"), token, timeout
         try:
             context = ssl.create_default_context(cafile=ca_file)
@@ -47,7 +55,7 @@ class APIBackend:
                 result = json.loads(raw)
         except urllib.error.HTTPError as exc:
             raise GuardError(f"Wazuh API HTTP {exc.code}; inspect access, token and endpoint") from None
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, RecursionError):
             raise GuardError("API connection/TLS/JSON failure; no retry to preserve event counts") from None
         if not isinstance(result, dict) or result.get("error") != 0:
             raise GuardError("Wazuh API reported an error")
@@ -84,7 +92,7 @@ class ReplayBackend:
     def __init__(self, report):
         if not isinstance(report, dict) or report.get("schema_version") != 1:
             raise GuardError("Replay file must be a RuleGuard report")
-        self.entries = {}
+        self.entries, self.steps = {}, {}
         if not isinstance(report.get("results"), list) or not report["results"]:
             raise GuardError("Replay needs a non-empty results array")
         for row in report["results"]:
@@ -92,31 +100,25 @@ class ReplayBackend:
                 raise GuardError("Replay requires complete recorded results")
             if not isinstance(row.get("case_id"), str) or type(row.get("step")) is not int or row["step"] < 1:
                 raise GuardError("Malformed replay case id or step")
+            check_report_row(row)
             key = (row["case_id"], row["step"])
             if key in self.entries:
                 raise GuardError("Duplicate replay step")
             self.entries[key] = row
+            # Index steps per case once, so start() does not rescan every row for every case.
+            self.steps.setdefault(row["case_id"], set()).add(row["step"])
 
     def start(self, case):
-        self.case, self.index = case, 0
-        found = {step for name, step in self.entries if name == case["id"]}
-        if found != set(range(1, len(case["events"]) + 1)):
+        self.case, self.index, self.digest = case, 0, fingerprint(case)
+        if self.steps.get(case["id"], set()) != set(range(1, len(case["events"]) + 1)):
             raise GuardError("Replay step count does not match case")
 
     def process(self, event):
         self.index += 1
         row = self.entries[(self.case["id"], self.index)]
-        if row.get("fingerprint") != fingerprint(self.case):
+        if row.get("fingerprint") != self.digest:
             raise GuardError("Replay input differs from recorded events")
-        actual = row["actual"]
-        if not isinstance(actual, dict) or set(actual) != {"rule_id", "level", "alert", "decoder", "groups", "mitre", "warning_count"}:
-            raise GuardError("Malformed recorded observation")
-        if type(actual["alert"]) is not bool or type(actual["warning_count"]) is not int or actual["warning_count"] < 0:
-            raise GuardError("Malformed recorded observation")
-        for key in ("groups", "mitre"):
-            if not isinstance(actual[key], list) or not all(isinstance(x, str) for x in actual[key]):
-                raise GuardError("Malformed recorded metadata")
-        return actual
+        return row["actual"]
 
     def close(self):
         pass

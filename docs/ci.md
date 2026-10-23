@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: python -m pip install git+https://github.com/farhan6667/wazuh-ruleguard
+      - run: python -m pip install "git+https://github.com/farhan6667/wazuh-ruleguard@v0.3.4"
       - run: ruleguard validate tests/wazuh/suite.json
 ```
 
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: python -m pip install git+https://github.com/farhan6667/wazuh-ruleguard
+      - run: python -m pip install "git+https://github.com/farhan6667/wazuh-ruleguard@v0.3.4"
       - name: Run the detection suite
         env:
           WAZUH_API_TOKEN: ${{ secrets.WAZUH_API_TOKEN }}
@@ -77,6 +77,7 @@ The compare step exits with 1 when behavior changed, which fails the job until s
 
 ## Things to keep in mind
 
+- Install a release tag you have reviewed (`@v0.3.4` above), not the moving `main` branch, so a later commit cannot change what your pipeline runs. The same goes for actions: pin them to a full commit SHA, as this repository's own workflows do, and let Dependabot propose updates.
 - Reports leave out raw event text and tokens. Case names and rule metadata can still be sensitive, so think before you upload artifacts from a public repository.
 - A failed request is never retried, because a retry could duplicate correlation events. Make sure the token lives long enough for the whole suite.
 - Logtest does not prove log collection, indexing or alert delivery. Treat a green run as one signal.
