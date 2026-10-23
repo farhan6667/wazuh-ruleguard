@@ -144,7 +144,8 @@ def _lint_root(root, path):
             findings.append(_finding("error", "duplicate-id", path, rule_id, "Rule id is defined more than once in the files checked."))
         seen[rule_id] = True
         level = rule.get("level")
-        if not _is_number(level) or not 0 <= int(level) <= 16:
+        # The length check comes first: int() refuses strings over 4300 digits with a ValueError.
+        if not _is_number(level) or len(level.lstrip("0")) > 2 or int(level) > 16:
             findings.append(_finding("error", "bad-level", path, rule_id, "level must be a whole number from 0 to 16."))
         for child in rule:
             if child.tag not in VALID_RULE_ELEMENTS:

@@ -20,8 +20,9 @@
   stall a CI job that lints rules from a pull request. All three checks are now linear; a test
   compares them against the old patterns on 5,000 random strings to show they flag the same text.
 - **`lint` crashed on some Unicode digits.** A level such as `²` passed `str.isdigit()` and then
-  crashed `int()` with a traceback; Arabic-Indic digits were accepted as a valid rule id. Ids and
-  levels must now be ASCII digits and are reported as findings, not crashes.
+  crashed `int()` with a traceback; Arabic-Indic digits were accepted as a valid rule id, and a
+  level over 4,300 digits long hit Python's integer conversion limit. Ids and levels must now be
+  ASCII digits and are reported as findings, not crashes.
 - **`lint` reported false cross-file duplicates** for rule ids inside XML comments, because it
   searched the raw text. It now reads ids from the parsed rules.
 - **`lint` refuses DOCTYPE and ENTITY declarations** with a clear message, and when it scans a

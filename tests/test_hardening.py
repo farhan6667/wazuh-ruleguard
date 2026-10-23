@@ -95,6 +95,14 @@ class LintHostileXml(unittest.TestCase):
         found = lint.lint_text(rule_file("<rule id='\u0661\u0662' level='3'><description>d</description></rule>"))
         self.assertEqual([f["code"] for f in found], ["bad-id"])
 
+    def test_absurdly_long_numbers_are_findings_not_crashes(self):
+        # int() refuses more than 4300 digits, so a 5000-digit level used to raise ValueError.
+        found = lint.lint_text(rule_file(f"<rule id='{'9' * 5000}' level='{'9' * 5000}'><description>d</description></rule>"))
+        self.assertEqual([f["code"] for f in found], ["bad-level"])
+        self.assertEqual(lint.lint_text(rule_file("<rule id='100300' level='016'><description>d</description></rule>")), [])
+        found = lint.lint_text(rule_file("<rule id='100300' level='017'><description>d</description></rule>"))
+        self.assertEqual([f["code"] for f in found], ["bad-level"])
+
     def test_doctype_and_entities_are_refused(self):
         for text in ("<!DOCTYPE g [<!ENTITY a 'b'>]><group/>",
                      "<!ENTITY x SYSTEM 'file:///etc/passwd'>",
