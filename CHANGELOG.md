@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.5: 2026-10-24
 
 - Rewrote the README to be scannable: a short "what it does" list, a "what's new" list for the
   current release, a 30 second quick start up top, and everything else (CI guide, suite contract,

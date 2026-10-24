@@ -28,11 +28,18 @@
 
 Built for anyone who maintains Wazuh detection rules and wants proof that a change did not break something else, not just a hope that it did not.
 
-## What's new in 0.3.4
+## What's new in 0.3.5
 
-- Fixed three rules in the PHP2Shell teaching example that would not have fired as written, caught through live testing on a real Wazuh 4.14.7 manager.
-- Added `examples/php2shell_suite.json`, a sample test suite for those rules.
-- Added `ruleguard lint` checks for mistakes found in that same testing: a regex pattern the engine can't compile, a rule that counts its own alerts, and a decoder name that doesn't exist.
+- Fixed a real hang: `ruleguard lint` could be made to run for hours on a crafted input (a cubic
+  regex backtrack). Also fixed crashes on hostile Unicode digits, deeply nested JSON, and a
+  non-ASCII case id on a legacy Windows console, plus a quadratic slowdown on long test suites.
+- README's quick start (`init`, `validate`, replay) now actually passes from a fresh clone; it
+  didn't before.
+- Supply chain: the build backend is bounded, GitHub Actions are pinned to commit SHAs, and
+  Dependabot now watches actions, pip and Docker.
+- Rewrote the README to be scannable (this section, a short "what it does" list, everything else
+  folded into collapsed sections), and redesigned the banner, "how it works" diagram and social
+  preview card in Wazuh's own blue palette.
 
 See the [full changelog](CHANGELOG.md) for every release.
 
