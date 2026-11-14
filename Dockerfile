@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 LABEL org.opencontainers.image.source="https://github.com/farhan6667/wazuh-ruleguard" \
       org.opencontainers.image.description="Test Wazuh 4.x detection rules with JSON scenarios and compare runs." \
